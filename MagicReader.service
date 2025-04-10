@@ -1,0 +1,17 @@
+[Unit]
+Description=MagicReader
+Wants=NetworkManager-wait-online.service
+After=NetworkManager-wait-online.service
+#After=multi-user.target
+
+[Service]
+Type=simple
+User=pi
+#Environment="XDG_RUNTIME_DIR=/run/user/1000"
+WorkingDirectory=/home/pi/magicreader
+ExecStartPre=/usr/bin/sleep 10
+ExecStart=/usr/bin/env /home/pi/magicreader/.venv/bin/python /home/pi/magicreader/app.py
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

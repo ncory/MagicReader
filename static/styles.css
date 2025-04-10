@@ -1,0 +1,53 @@
+body {
+    margin: 5px;
+}
+
+.header {
+    margin-bottom: 15px;
+}
+
+.title {
+    font-size: 3rem;
+    color: blue;
+}
+
+.subtitle {
+    font-size: 1rem;
+    font-style: italic;
+}
+
+.status-parent {
+    background-color: gray;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+
+.status-title {
+    font-weight: bold;
+    margin-right: 5px;
+}
+
+.status-message {
+    font-weight: normal;
+}
+
+.status-readAllowed {
+    margin-top: -5px;
+    width: 100%;
+    font-style: italic;
+}
+
+.controls {
+    background-color: gray;
+    padding: 10px;
+}
+
+.sequences {
+    margin-top: 5px;
+}
+
+.sequence-button {
+    margin-right: 5px;
+}

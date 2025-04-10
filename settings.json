@@ -1,0 +1,141 @@
+{
+    "settings": {
+        "print_band_id": true,
+        "wled_address": "magicreader1-wled.local",
+        "wled_preset_black": 15,
+        "wled_preset_startup": 16,
+        "wled_preset_waiting": 8,
+        "wled_preset_success": 10,
+        "wled_preset_error": 13,
+        "sound_startup": "Sounds/Startup.wav",
+        "sound_waiting": null,
+        "sound_success": "Sounds/TapIn.wav",
+        "sound_error": "Sounds/Error.wav",
+        "startup_read_delay": 3,
+        "success_action_delay": 2,
+        "error_read_delay": 5,
+        "inactivity_timeout": 3600
+    },
+    "bands": {
+        "584194215538": {
+            "name": "Nate's Blue Band",
+            "sequence": "HappilyEverAfter"
+        },
+        "584189178015": {
+            "name": "EPCOT 40th Band",
+            "sequence": "epcot-40th"
+        },
+        "disney": {
+            "name": "EPCOT Band",
+            "sequence": "epcot-anthem"
+        },
+        "unknown": [{"sequence": "unknown-band"}]
+    },
+    "sequences": {
+        "epcot-anthem": {
+            "name": "EPCOT Anthem",
+            "wled_action": null,
+            "music": "Sounds/EPCOT_Anthem.wav",
+            "actions": [
+                {
+                    "type": "url",
+                    "url": "http://spaceshipearth.local/win&PL=39",
+                    "method": "GET",
+                    "delay": 0
+                },
+                {
+                    "type": "brightsign",
+                    "address": "192.168.1.91",
+                    "port": 5000,
+                    "command": "ShowStop"
+                },
+                {
+                    "type": "brightsign",
+                    "address": "192.168.1.91",
+                    "port": 5000,
+                    "command": "Leota Show",
+                    "delay": 0
+                }
+            ],
+            "wait_delay": 191,
+            "cancel_allowed": false
+        },
+        "epcot-40th": {
+            "name": "EPCOT 40th Anniversary",
+            "wled_action": 26,
+            "music": "Sounds/EPCOT_Anniversary.wav",
+            "actions": [
+                {
+                    "type": "url",
+                    "url": "http://spaceshipearth.local/win&PL=14",
+                    "method": "GET",
+                    "delay": 0
+                },
+                {
+                    "type": "brightsign",
+                    "address": "192.168.1.91",
+                    "port": 5000,
+                    "command": "ShowStop"
+                },
+                {
+                    "type": "brightsign",
+                    "address": "192.168.1.91",
+                    "port": 5000,
+                    "command": "Busts Show",
+                    "delay": 0
+                }
+            ],
+            "wait_delay": 249
+        },
+        "HappilyEverAfter": {
+            "name": "Happily Ever After",
+            "wled_action": null,
+            "music": "Sounds/HappilyEverAfter.mp3",
+            "actions": [
+                {
+                    "type": "url",
+                    "url": "http://spaceshipearth.local/win&PL=75",
+                    "method": "GET",
+                    "delay": 0
+                },
+                {
+                    "type": "chromateq",
+                    "address": null,
+                    "port": 8093,
+                    "scene_id": 1,
+                    "area": 0,
+                    "loops": 1,
+                    "status": true
+                },
+                {
+                    "type": "brightsign",
+                    "address": "192.168.1.91",
+                    "port": 5000,
+                    "command": "ShowStop"
+                },
+                {
+                    "type": "brightsign",
+                    "address": "192.168.1.91",
+                    "port": 5000,
+                    "command": "Start-Full",
+                    "delay": 0
+                }
+            ],
+            "wait_delay": 1363
+        },
+        "unknown-band": {
+            "name": "Unknown Band",
+            "wled_action": null,
+            "music": null,
+            "actions": [
+                {
+                    "type": "brightsign",
+                    "address": "192.168.1.91",
+                    "port": 5000,
+                    "command": "ShowStop"
+                }
+            ],
+            "wait_delay": 2
+        }
+    }
+}

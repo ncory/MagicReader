@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MagicReader</title>
+    <link rel="stylesheet" href="bootstrap.min.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="jquery-3.7.1.min.js"></script>
+    <script src="bootstrap.bundle.min.js"></script>
+    <script src="magicreaderclient.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a href="#" class="navbar-brand">MagicReader</a>
+            <div class="subtitle text-light">{{host_address}}</div>
+            <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbarCollapse">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarCollapse">
+                <div class="navbar-nav">
+                    <a href="#" class="nav-item nav-link active">Controls</a>
+                    <a href="#" class="nav-item nav-link">Settings</a>
+                    <a href="bands.html" class="nav-item nav-link">Bands</a>
+                    <a href="#" class="nav-item nav-link">Sequences</a>
+                </div>
+                <div class="navbar-nav ms-auto">
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            System
+                          </a>
+                          <ul class="dropdown-menu">
+                            <li><a class="dropdown-item bg-warning text-light" href="#" onclick="controlReboot()">Reboot</a></li>
+                            <li><a class="dropdown-item bg-danger text-light href="#" onclick="controlShutdown()">Shutdown</a></li>
+                          </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        <div class="p-3 mt-3 mb-3 bg-light rounded-3 status-parent">
+            <div class="h2 status-title">Status:</div>
+            <div class="h2 status-message" id="status-message">Unknown</div>
+            <div class="h4 status-readAllowed" id="status-readAllowed">RFID Read Allowed</div>
+        </div>
+
+        <div class="p-3 mb-3 bg-light rounded-3 controls">
+            <button type="button" class="btn btn-dark" onclick="controlBlackout()">Blackout</button>
+            <button type="button" class="btn btn-success" onclick="controlWait()">Wait for Tap</button>
+            <button type="button" class="btn btn-warning" onclick="controlStopSequence()">Stop Sequence</button>
+        </div>
+
+        <div class="p-3 mb-3 bg-light rounded-3 conainer">
+            <h4>Sequences</h4>
+            <div class="sequences d-grid gap-2 d-md-block" id="sequences">
+                <button data-sequence="any1" type="button" class="sequence-button btn btn-primary" onclick="playSequence(this)">Play "Epcot Anthem"</button>
+                <button data-sequence="epcot-40th" type="button" class="sequence-button btn btn-primary" onclick="playSequence(this)">Play "Epcot 40th Anniversary"</button>
+                <button data-sequence="HappilyEverAfter" type="button" class="sequence-button btn btn-primary" onclick="playSequence(this)">Play "Happily Ever After"</button>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

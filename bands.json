@@ -1,0 +1,15 @@
+{
+    "584194215538": {
+        "name": "Nate's Blue Band",
+        "sequence": "HappilyEverAfter"
+    },
+    "584189178015": {
+        "name": "EPCOT 40th Band",
+        "sequence": "epcot-40th"
+    },
+    "disney": {
+        "name": "EPCOT Band",
+        "sequence": "epcot-anthem"
+    },
+    "unknown": [{"sequence": "unknown-band"}]
+}
