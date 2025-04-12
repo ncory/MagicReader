@@ -1,5 +1,17 @@
+[build-system]
+requires = [
+    "setuptools>=61.0",
+    "wheel"
+]
+
 [project]
 name = "MagicReader"
+authors = [
+    {name = "Nate Cory", email = "nate@natecory.com"}
+]
+description = "An RFID reader app for Raspberry Pi that replicates the functionality of Disney MagicBand readers."
+version = "0.0.1"
+requires-python = ">=3.11.2"
 dependencies =[
     "flask",
     "httplib2",

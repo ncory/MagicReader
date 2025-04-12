@@ -9,7 +9,7 @@
             "name": "MagicReader App",
             "type": "debugpy",
             "request": "launch",
-            "program": "app.py",
+            "program": "${workspaceFolder}/magicreader/__main__.py",
             "console": "integratedTerminal"
         },
         {

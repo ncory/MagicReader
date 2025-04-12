@@ -1,7 +1,7 @@
 import serial
 from serial.tools import list_ports
 
-from bandManager import BandManager
+from magicreader.bandManager import BandManager
 
 try:
     # Create band manager
