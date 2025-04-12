@@ -1,0 +1,10 @@
+[project]
+name = "MagicReader"
+dependencies =[
+    "flask",
+    "httplib2",
+    "RPi",
+    "pyserial",
+    "pygame",
+    "ordered_enum"
+]
