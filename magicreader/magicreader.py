@@ -15,13 +15,15 @@ from mfrc522 import SimpleMFRC522
 import RPi.GPIO as GPIO
 import signal
 import threading
-from enum import Enum
-from ordered_enum import OrderedEnum
 import queue
 import datetime
 import socket
 from functools import total_ordering
+from helpers import State, AppEvent, AppEventType, CancelReadException
 from bandManager import BandManager
+from rfid import RfidRead, RfidReader
+from rfid_mfrc522 import RfidMfrc522
+from rfid_weigand import RfidWeigand
 
 print("Starting...", flush=True)
 
@@ -54,49 +56,9 @@ pygame.init()
 
 print("Finished Config Loading", flush=True)
 
-######### Enums #########
-class State(Enum):
-    Uknown = "unkown"
-    Starting = "starting"
-    Welcome = "welcome"
-    WaitingForTap = "waitingForTap"
-    Checking = "checking"
-    TapSuccess = "success"
-    PlayingSequence = "playingSequence"
-    Blackout = "blackout"
-    Error = "error"
-    Shutdown = "shutdown"
 
-class AppEventType(OrderedEnum):
-    ReadRfid = "readRfid"
-    EnterWaitMode = "enterWaitMode"
-    PlaySequence = "playSequence"
-    StopSequence = "stopSequence"
-    Blackout = "blackout"
-    Shutdown = "shutdown"
-#    def __lt__(self, other):
-#        if self.__class__ is other.__class__:
-#            return self.value < other.value
-#        return NotImplemented
-
-class AppEvent():
-    def __init__(self, type: AppEventType, data: any = None):
-        self.type = type
-        self.data = data
-    def __lt__(self, other):
-        if self.__class__ is other.__class__:
-            return self.type < other.type
-        return NotImplemented
-
-class RfidRead():
-    def __init__(self, id):
-        self.id = id
-        self.time = datetime.datetime.now()
 
 ######### Class #########
-
-class CancelReadException(Exception):
-    pass
 
 class MagicBand():
     def __init__(self):
@@ -119,11 +81,14 @@ class MagicBand():
         # Create queue
         self.event_queue = queue.PriorityQueue()
         self.event_thread = None
-        print("Creating RFID reader object", flush=True)
         # Create RFID reader and fix logging level
-        self.reader = SimpleMFRC522()
-        self.reader.READER.logger.setLevel('CRITICAL')
-        self.reader_thread = None
+        print("Creating RFID reader object", flush=True)
+        if (settings['rfid_mode'] == 'weigand-serial'):
+            self.reader = RfidWeigand(self, settings.get('rfid_port'))
+        elif (settings['rfid_mode'] == 'mfrc522'):
+            self.reader = RfidMfrc522(self)
+        else:
+            self.reader = None
         # Pre-load all sound files
         self.loadAllSounds()
     
@@ -132,13 +97,15 @@ class MagicBand():
         # Load bands from file
         if not self.band_manager.loadFromFile():
             return False
-        # Create RFID thread and start it
-        self.reader_thread = threading.Thread(target=self.runReaderThread, daemon=True)
-        self.reader_thread.start()
-        # Install signal handler
-        #signal.signal(signal.SIGUSR1, MagicBand.on_signusr1)
         # Set active flag
         self.is_active = True
+        # Start RFID reader
+        if self.reader is None:
+            return False
+        if self.reader.start() is False:
+            return False
+        # Install signal handler
+        #signal.signal(signal.SIGUSR1, MagicBand.on_signusr1)
         # Play startup lights and sound
         self.setState(State.Welcome)
         self.triggerStartup()
@@ -162,13 +129,13 @@ class MagicBand():
         # Clear active flags
         self.is_active = False
         self.allowRead = False
+        # Stop RIFD reader
+        self.reader.stop()
         # Trigger blackout on LEDs
         self.callLedPreset(settings['wled_preset_black'])
         # Stop all sound
         pygame.mixer.stop()
         pygame.mixer.music.stop()
-        # Cleanup RFID reader
-        self.reader.READER.Close_MFRC522()
 
     def onError(self, message: str = None):
         # Status
@@ -282,16 +249,16 @@ class MagicBand():
                 if self.read_once_enabled:
                     # Accept this as our result
                     self.read_once_enabled = False
-                    self.read_once_result = event.data.id
+                    self.read_once_result = event.data
                     continue
                 # Are we looking for an ID?
                 if self.allowRead:
                     id = event.data.id
-                    print(f"Accepted RFID read: {id}", flush=True)
+                    print(f"Accepted RFID read: {id}   isDisney: {event.data.isDisney}", flush=True)
                     # Stop more reads
                     self.allowRead = False
                     # Handle read
-                    self.onReadMagicBand(id)
+                    self.onReadMagicBand(id, event.data.isDisney)
             elif event.type == AppEventType.EnterWaitMode:
                 # ENTER WAIT MODE
                 # Allow reads
@@ -330,8 +297,7 @@ class MagicBand():
                 self.cleanup()
                 # End this thread
                 return
-
-
+    '''
     ######### RFID Functions #########
 
     def runReaderThread(self):
@@ -411,9 +377,21 @@ class MagicBand():
     def on_signusr1(sig, frame):
         raise CancelReadException()
 
+'''
+    def cancelRead(self):
+        """Sends the SIGUSR1 signal to interrupt any pending RFID reads."""
+        # Set flag to tell ourself what we're doing
+        self.should_cancel_read = True
+        # Kill read thread
+        #if self.thread is not None:
+            #signal.pthread_kill(self.thread.ident, signal.SIGTSTP)
+        #print("Sent kill signal")
+        # Send signal
+        #signal.raise_signal(signal.SIGUSR1)
+
     ######### MagicBand Functions #########
 
-    def onReadMagicBand(self, band_id):
+    def onReadMagicBand(self, band_id:str, isDisney:bool):
         """Looks up the band ID, and runs a matching sequence."""
         # Set state
         self.setState(State.Checking)
@@ -427,7 +405,7 @@ class MagicBand():
             print(f"Read MagicBand ID: {band_id}", flush=True)
         # Lookup sequence name for band id
         print("Looking up band id", flush=True)
-        name = self.band_manager.lookupBandId(band_id)
+        name = self.band_manager.lookupBandId(band_id, isDisney)
         # Get matching sequence
         print("Looking up sequence", flush=True)
         sequence = self.lookupSequence(name)
@@ -529,7 +507,10 @@ class MagicBand():
     def triggerBlackout(self):
         """Turns off LEDs, stops all sounds, and cancels any pending RFID read actions"""
         # Stop RFID reading
-        self.cancelRead()
+        #self.cancelRead()
+        if self.read_once_enabled:
+            self.read_once_enabled = False
+            self.read_once_result = None
         # Stop all sound
         pygame.mixer.stop()
         pygame.mixer.music.stop()
@@ -911,14 +892,13 @@ class MagicBand():
                 print("Timed out reading single RFID", flush=True)
                 break
             # Check for result
-            if self.read_once_result is not None:
+            if self.read_once_result is not None and isinstance(self.read_once_result, RfidRead):
                 # Success!
                 # Check if ID is a MagicBand and setup result
-                id = str(self.read_once_result)
-                result = (id,
-                          BandManager.isIdMagicBandOrMagicBand2(id),
-                          BandManager.isIdMagicBandPlus(id))
-                print(f"Success reading single RFID: {result}", flush=True)
+                id = str(self.read_once_result.id)
+                isDisney = self.read_once_result.isDisney
+                result = (id, isDisney)
+                print(f"Success reading single RFID: {result}   isDisney: {isDisney}", flush=True)
                 break
             # Nope, wait one second
             time.sleep(1)

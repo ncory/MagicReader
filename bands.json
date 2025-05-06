@@ -8,7 +8,7 @@
         "sequence": "epcot-40th"
     },
     "disney": {
-        "name": "EPCOT Band",
+        "name": "Disney MagicBands",
         "sequence": "epcot-anthem"
     },
     "unknown": [{"sequence": "unknown-band"}]

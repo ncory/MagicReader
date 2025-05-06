@@ -11,11 +11,35 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     # Create app
     app = Flask("MagicReaderApi")
 
+
+    ###### Pages ######
+
     @app.route('/')
     def index():
         hostname = platform.node()
         host_url = f"http://{hostname}:{port}/"
         return render_template("index.html", host_address=host_url)
+
+    @app.route('/bands.html')
+    def page_bands():
+        hostname = platform.node()
+        host_url = f"http://{hostname}:{port}/"
+        return render_template("bands.html", host_address=host_url)
+
+    @app.route('/settings.html')
+    def page_settings():
+        hostname = platform.node()
+        host_url = f"http://{hostname}:{port}/"
+        return render_template("settings.html", host_address=host_url)
+
+    @app.route('/sequences.html')
+    def page_sequences():
+        hostname = platform.node()
+        host_url = f"http://{hostname}:{port}/"
+        return render_template("sequences.html", host_address=host_url)
+
+
+    ###### Status ######
 
     @app.route("/status")
     def status():
@@ -160,7 +184,7 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     @app.route('/bands/read', methods=['PUT'])
     def put_bandsRead():
         # Ask app to read a single RFID
-        (id, isMagicBand, isMagicBandPlus) = magicreader.api_read_single_rfid()
+        (id, isDisneyBand) = magicreader.api_read_single_rfid()
         # Did we get an ID?
         if id is None:
             # No - report error
@@ -174,8 +198,7 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
                 "result": "ok",
                 "data": {
                     "id": id,
-                    "isMagicBand": isMagicBand,
-                    "isMagicBandPlus": isMagicBandPlus
+                    "isDisneyBand": isDisneyBand
                 }
             }
 

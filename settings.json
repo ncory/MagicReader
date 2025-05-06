@@ -1,5 +1,6 @@
 {
     "settings": {
+        "rfid_mode": "weigand-serial",
         "print_band_id": true,
         "wled_address": "magicreader1-wled.local",
         "wled_preset_black": 15,
@@ -15,21 +16,6 @@
         "success_action_delay": 2,
         "error_read_delay": 5,
         "inactivity_timeout": 3600
-    },
-    "bands": {
-        "584194215538": {
-            "name": "Nate's Blue Band",
-            "sequence": "HappilyEverAfter"
-        },
-        "584189178015": {
-            "name": "EPCOT 40th Band",
-            "sequence": "epcot-40th"
-        },
-        "disney": {
-            "name": "EPCOT Band",
-            "sequence": "epcot-anthem"
-        },
-        "unknown": [{"sequence": "unknown-band"}]
     },
     "sequences": {
         "epcot-anthem": {

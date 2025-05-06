@@ -387,12 +387,10 @@ function buttonReadNewBand() {
             }
             // Get values
             let id = getStringFromDict(data, 'id');
-            let isMagicBand = getBoolFromDict(data, 'isMagicBand');
-            let isMagicBandPlus = getBoolFromDict(data, 'isMagicBandPlus');
+            let isMagicBand = getBoolFromDict(data, 'isDisneyBand');
             // Yes
             let str = "Success! Read RFID:  " + id;
-            if (isMagicBandPlus) str = str + " (MagicBand Plus)";
-            else if (isMagicBand) str = str + " (MagicBand 1 or 2)";
+            if (isMagicBand) str = str + " (MagicBand)";
             $('#readNewBand-result').text(str);
             enableReadNewBandButton();
         },

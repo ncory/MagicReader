@@ -1,6 +1,6 @@
 import json
 import random
-import re
+#import re
 
 class BandManager:
 
@@ -16,7 +16,7 @@ class BandManager:
             if seq_name is not None and isinstance(seq_name, str):
                 found_seq_names.append(seq_name)
 
-    def lookupBandId(self, band_id):
+    def lookupBandId(self, band_id:str, isDisney:bool):
         """Looks up sequence name for band id"""
         found_seq_names = []     
         # Look for band_id
@@ -24,7 +24,7 @@ class BandManager:
             print("Found band id", flush=True)
             BandManager.addBandSequenceNamesToList(self.bands, band_id, found_seq_names)
         # Alternatively, is it a Disney MagicBand id?
-        if len(found_seq_names) < 1 and BandManager.isIdDisneyBand(band_id) and 'disney' in self.bands:
+        if len(found_seq_names) < 1 and isDisney and 'disney' in self.bands:
             print("Band has a Disney ID - using 'disney'", flush=True)
             BandManager.addBandSequenceNamesToList(self.bands, 'disney', found_seq_names)
         # Last fallback: use sequences for "unknown"
@@ -120,7 +120,7 @@ class BandManager:
     
 
     ######### Is Disney Band #########
-
+'''
     REGEX_MAGICBAND = re.compile("5841[0-9]+")
     #REGEX_MAGICBAND = re.compile("04[0-9a-zA-Z]+80")
     REGEX_MAGICBAND_PLUS = re.compile("04[0-9a-zA-Z]+90")
@@ -152,5 +152,6 @@ class BandManager:
         if BandManager.REGEX_MAGICBAND_PLUS.match(id):
             return True
         return False
+'''
 
     
