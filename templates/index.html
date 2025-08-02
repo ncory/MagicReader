@@ -10,7 +10,7 @@
     <script src="static/bootstrap.bundle.min.js"></script>
     <script src="static/magicreaderclient.js"></script>
 </head>
-<body>
+<body onload="onLoadMainPage()">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a href="#" class="navbar-brand">MagicReader</a>
@@ -31,6 +31,7 @@
                             System
                           </a>
                           <ul class="dropdown-menu">
+                            <li><a class="dropdown-item bg-info text-light" href="#" onclick="controlMagicWand()">Magic Wand</a></li>
                             <li><a class="dropdown-item bg-warning text-light" href="#" onclick="controlReboot()">Reboot</a></li>
                             <li><a class="dropdown-item bg-danger text-light href="#" onclick="controlShutdown()">Shutdown</a></li>
                           </ul>

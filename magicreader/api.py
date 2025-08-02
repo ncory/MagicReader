@@ -103,6 +103,12 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     def control_reboot():
         os.system("sudo reboot")
         return {"result": "ok"}
+
+    @app.route('/control/magicWand')
+    def control_magicWand():
+        #os.system("/home/pi/magicreader/MagicWand.sh")
+        os.system("sudo systemctl start MagicWand.service")
+        return {"result": "ok"}
     
 
     ###### Sequences ######
@@ -148,10 +154,10 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
                     if not isinstance(seq_id, str):
                         seq_id = None
                 # Process with band manager
-                result = app.band_manager.updateBand(band_id, name, seq_id)
+                result = magicreader.band_manager.updateBand(band_id, name, seq_id)
                 if result:
                     # Done - now save to file
-                    if not app.band_manager.saveToFile():
+                    if not magicreader.band_manager.saveToFile():
                         # Error saving - get updated band list but return error
                         result = get_bands()
                         result['result'] = "error"
@@ -159,7 +165,7 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
                     else:
                         # Success - return updated band list
                         return get_bands()
-        except:
+        except Exception as e:
             pass
         # If we got here we failed
         return {"result": "error"}
@@ -167,10 +173,10 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     @app.route('/band/<band_id>', methods=['DELETE'])
     def delete_band(band_id):
         # Delete from band manager
-        result = app.band_manager.deleteBand(band_id)
+        result = magicreader.band_manager.deleteBand(band_id)
         if result:
             # Done - now save to file
-            if not app.band_manager.saveToFile():
+            if not magicreader.band_manager.saveToFile():
                 # Error saving - get updated band list but return error
                 result = get_bands()
                 result['result'] = "error"

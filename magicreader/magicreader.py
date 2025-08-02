@@ -136,6 +136,8 @@ class MagicBand():
         # Stop all sound
         pygame.mixer.stop()
         pygame.mixer.music.stop()
+        # Cleanup GPIO
+        GPIO.cleanup()
 
     def onError(self, message: str = None):
         # Status

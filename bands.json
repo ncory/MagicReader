@@ -1,15 +1,1 @@
-{
-    "584194215538": {
-        "name": "Nate's Blue Band",
-        "sequence": "HappilyEverAfter"
-    },
-    "584189178015": {
-        "name": "EPCOT 40th Band",
-        "sequence": "epcot-40th"
-    },
-    "disney": {
-        "name": "Disney MagicBands",
-        "sequence": "epcot-anthem"
-    },
-    "unknown": [{"sequence": "unknown-band"}]
-}
+{"584194215538": {"name": "Nate's Blue Band", "sequence": "HappilyEverAfter"}, "584189178015": {"name": "EPCOT 40th Band", "sequence": "epcot-40th"}, "disney": {"name": "Disney MagicBands", "sequence": "epcot-anthem"}, "unknown": [{"sequence": "unknown-band"}], "232229082205": {"name": "Orange/Blank", "sequence": "HappilyEverAfter"}}

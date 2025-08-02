@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>MagicReader</title>
-    <link rel="stylesheet" href="bootstrap.min.css" />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="jquery-3.7.1.min.js"></script>
-    <script src="bootstrap.bundle.min.js"></script>
-    <script src="magicreaderclient.js"></script>
+    <link rel="stylesheet" href="/static/bootstrap.min.css" />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/jquery-3.7.1.min.js"></script>
+    <script src="/static/bootstrap.bundle.min.js"></script>
+    <script src="/static/magicreaderclient.js"></script>
 </head>
-<body>
+<body onload="onLoadBandsPage()">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a href="#" class="navbar-brand">MagicReader</a>
@@ -20,9 +20,9 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarCollapse">
                 <div class="navbar-nav">
-                    <a href="#" class="nav-item nav-link active">Controls</a>
+                    <a href="/" class="nav-item nav-link">Controls</a>
                     <a href="#" class="nav-item nav-link">Settings</a>
-                    <a href="bands.html" class="nav-item nav-link">Bands</a>
+                    <a href="#" class="nav-item nav-link active">Bands</a>
                     <a href="#" class="nav-item nav-link">Sequences</a>
                 </div>
                 <div class="navbar-nav ms-auto">
@@ -31,6 +31,7 @@
                             System
                           </a>
                           <ul class="dropdown-menu">
+                            <li><a class="dropdown-item bg-info text-light" href="#" onclick="controlMagicWand()">Magic Wand</a></li>
                             <li><a class="dropdown-item bg-warning text-light" href="#" onclick="controlReboot()">Reboot</a></li>
                             <li><a class="dropdown-item bg-danger text-light href="#" onclick="controlShutdown()">Shutdown</a></li>
                           </ul>
@@ -48,19 +49,123 @@
             <div class="h4 status-readAllowed" id="status-readAllowed">RFID Read Allowed</div>
         </div>
 
-        <div class="p-3 mb-3 bg-light rounded-3 controls">
-            <button type="button" class="btn btn-dark" onclick="controlBlackout()">Blackout</button>
-            <button type="button" class="btn btn-success" onclick="controlWait()">Wait for Tap</button>
-            <button type="button" class="btn btn-warning" onclick="controlStopSequence()">Stop Sequence</button>
+        <div class="p-3 mb-3 bg-light rounded-3 read-once-parent">
+            <!--<h4>Identify Bands</h4>-->
+            <button type="button" class="btn btn-primary" id="button-readNewBand" onclick="buttonReadNewBand();">
+                <span class="spinner-border spinner-border-sm d-none" role="status" id="button-readerNewBand-spinner"></span>
+                <span id="button-readNewBand-text">Read New Band</span>
+            </button>
+            <button type="button" class="btn btn-success" id="button-addNewBand" onclick="buttonAddNewBand();">Add New Band</button>
+            <div class="h6" id="readNewBand-result"></div>
+        </div>
+
+        <div id="addNewBandDiv" class="p-3 mb-3 bg-light rounded-3 d-none">
+            <h4>Add New Band</h4>
+            <form>
+                <div class="row mb-3">
+                    <label for="newBandBandId" class="col-sm-1 col-form-label">Band ID</label>
+                    <div class="col-sm-10">
+                        <input type="text" class="form-control" id="newBandBandId">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <label for="newBandNickname" class="col-sm-1 col-form-label">Nickname</label>
+                    <div class="col-sm-10">
+                        <input type="text" class="form-control" id="newBandNickname">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <label for="newBandSequence" class="col-sm-1 col-form-label">Sequence</label>
+                    <div class="col-sm-10">
+                        <select class="form-select" id="newBandSequence">
+                            <option selected>Open this select menu</option>
+                            <option value="1">One</option>
+                            <option value="2">Two</option>
+                            <option value="3">Three</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="buttonAddNewBandCancel();">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="buttonAddNewBandSave();">Save Band</button>
+            </form>
         </div>
 
         <div class="p-3 mb-3 bg-light rounded-3 conainer">
-            <h4>Sequences</h4>
-            <div class="sequences d-grid gap-2 d-md-block" id="sequences">
-                <button data-sequence="any1" type="button" class="sequence-button btn btn-primary" onclick="playSequence(this)">Play "Epcot Anthem"</button>
-                <button data-sequence="epcot-40th" type="button" class="sequence-button btn btn-primary" onclick="playSequence(this)">Play "Epcot 40th Anniversary"</button>
-                <button data-sequence="HappilyEverAfter" type="button" class="sequence-button btn btn-primary" onclick="playSequence(this)">Play "Happily Ever After"</button>
+            <h4>Known Bands</h4>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle" id="bandsTable">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">Nickname</th>
+                            <th scope="col">Sequence</th>
+                            <th scope="col"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="bandsTable_body">
+                        <tr>
+                            <td>1234567890</td>
+                            <td>Nate's Blue Band</td>
+                            <td>Happily Ever After</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-secondary">Edit</button>
+                                    <button type="button" class="btn btn-danger">Delete</button>
+                                  </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>0987654321</td>
+                            <td>EPCOT 40th Band</td>
+                            <td>Epcot 40th Anniversary</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-secondary">Edit</button>
+                                    <button type="button" class="btn btn-danger">Delete</button>
+                                  </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+        </div>
+
+        <!-- Edit Sequences Modal -->
+        <div class="modal fade" id="editBandModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5">Edit Band</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
+            <div class="modal-body">
+                <form>
+                    <div class="row mb-3">
+                        <label for="editBandBandId" class="col-sm-2 col-form-label">Band ID</label>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" id="editBandBandId">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <label for="editBandNickname" class="col-sm-2 col-form-label">Nickname</label>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" id="editBandNickname">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <label for="editBandSequence" class="col-sm-2 col-form-label">Sequence</label>
+                        <div class="col-sm-10">
+                            <select class="form-select" id="editBandSequence"></select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="buttonEditBandSave();">Save Changes</button>
+            </div>
+            </div>
+        </div>
         </div>
 
     </div>

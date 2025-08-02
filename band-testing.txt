@@ -22,3 +22,38 @@ Handheld reader UID:    04 53 65 2A C0 5F 80    (1217593880895360 in decimal)
 Handheld reader number: 0711283460              (2A655304 in hex)
 USB Serial reader:      06640388                (00655304 in hex)
 Older MFRC522 reader:   584188126650            (88045365BA in hex)
+
+
+
+##### Goofy band
+0031
+0000
+0000
+0031
+0063
+0000
+0000
+##### Generic purple band
+0031
+0000
+
+
+0063
+0015
+
+###### Yellow band
+0015
+0000
+0007
+0000
+
+
+##### MB1 Purple
+
+0031
+0063
+0015
+0000
+0000
+
+#####

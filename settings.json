@@ -1,8 +1,8 @@
 {
     "settings": {
-        "rfid_mode": "weigand-serial",
+        "rfid_mode": "mfrc522",
         "print_band_id": true,
-        "wled_address": "magicreader1-wled.local",
+        "wled_address": "hm2-wled.local",
         "wled_preset_black": 15,
         "wled_preset_startup": 16,
         "wled_preset_waiting": 8,
@@ -122,6 +122,68 @@
                 }
             ],
             "wait_delay": 2
+        }
+    },
+    "tapInPresets": {
+        "generic": {
+            "name": "Generic",
+            "sound": "Tap In - Generic.wav",
+            "wled_preset": 10
+        },
+        "hm-bugle": {
+            "name": "HM - Bugle",
+            "sound": "Tap In - Bugle.wav",
+            "wled_preset": 21
+        },
+        "hm-crow": {
+            "name": "HM - Crow",
+            "sound": "Tap In - Crow.wav",
+            "wled_preset": 22
+        },
+        "hm-doorbell": {
+            "name": "HM - Doorbell",
+            "sound": "Tap In - Doorbell.wav",
+            "wled_preset": 23
+        },
+        "hm-frees-laugh": {
+            "name": "HM - Frees Laugh",
+            "sound": "Tap In - Frees Laugh.wav",
+            "wled_preset": 24
+        },
+        "hm-frees-there-and-just": {
+            "name": "HM - Frees There You Are and Just In Time",
+            "sound": "Tap In - Frees There You Are and Just In Time.wav",
+            "wled_preset": 25
+        },
+        "hm-frees-there":{
+            "name": "HM - Frees There You Are",
+            "sound": "Tap In - Frees There You Are.wav",
+            "wled_preset": 26
+        },
+        "hm-leota-bell": {
+            "name": "HM - Leota Bell",
+            "sound": "Tap In - Leota Bell.wav",
+            "wled_preset": 27
+        },
+        "hm-leota-beyond": {
+            "name": "HM - Leota Beyond",
+            "sound": "Tap In - Leota Beyond.wav",
+            "wled_preset": 28
+        },
+        "hm-leota-spirits": {
+            "name": "HM - Leota Spirits",
+            "sound": "Tap In - Leota Spirits.wav",
+            "wled_preset": 29
+        },
+        "hm-music": {
+            "name": "HM - Music",
+            "sound": "Tap In - Music.wav",
+            "wled_preset": 30
+        },
+        "hm-seanc-horn": {
+            "name": "HM - Seance Horn",
+            "sound": "Tap In - Seance Horn.wav",
+            "wled_preset": 31
         }
     }
 }

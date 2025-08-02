@@ -9,9 +9,10 @@ Type=simple
 User=pi
 Environment="XDG_RUNTIME_DIR=/run/user/1000"
 WorkingDirectory=/home/pi/magicreader
-ExecStartPre=/usr/bin/sleep 10
+#ExecStartPre=/usr/bin/sleep 10
 ExecStart=/usr/bin/env /home/pi/magicreader/.venv/bin/python /home/pi/magicreader/magicreader/__main__.py
 Restart=on-abort
 
 [Install]
-WantedBy=multi-user.target
+#WantedBy=multi-user.target
+#WantedBy=

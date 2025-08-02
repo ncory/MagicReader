@@ -54,24 +54,37 @@ function getBoolFromDict(dict, key, returnFalseNotNull = true) {
 $(function() {
     // Initial updates
     updateStatus();
-    displaySequences();
-    displayBands();
     getSequenceList();
-    getKnownBandsList();
     // Regular status updates
     setInterval(updateStatus, 1000);
 });
 
+function onLoadMainPage() {
+    displaySequences();
+}
+
+function onLoadBandsPage() {
+    // Show bands table
+    displayBands();
+    // Refresh bands
+    getKnownBandsList();
+    // Update sequences in selects
+    updateSequencesInSelect($('#newBandSequence'));
+    updateSequencesInSelect($('#editBandSequence'));
+}
+
 
 /////// API Functions ///////
 
-function makeApiCall(endpoint, method='GET', callback_success=null, callback_error=null) {
+function makeApiCall(endpoint, method='GET', callback_success=null, callback_error=null, data=null) {
     url = endpoint
     $.ajax({
         url: url,
         method: method,
         success: callback_success,
-        error: callback_error
+        error: callback_error,
+        contentType: 'application/json',
+        data: data ? JSON.stringify(data) : null,
     });
 }
 
@@ -104,6 +117,10 @@ function controlShutdown() {
 
 function controlReboot() {
     makeApiCall('/control/reboot');
+}
+
+function controlMagicWand() {
+    makeApiCall('/control/magicWand');
 }
 
 function playSequence(element) {
@@ -216,13 +233,21 @@ function getSequenceList() {
             // Success
             // Cache sequences list
             sequences = response.data;
+            // Display sequence buttons
             displaySequences();
+            // Update in selects
+            updateSequencesInSelect($('#newBandSequence'));
+            updateSequencesInSelect($('#editBandSequence'));
         },
         function(jqXHR, textStatus, errorThrown) {
             // ERROR
             console.debug("ERROR loading sequences:" + errorThrown);
             sequences = null;
+            // Display sequence buttons
             displaySequences();
+            // Update in selects
+            updateSequencesInSelect($('#newBandSequence'));
+            updateSequencesInSelect($('#editBandSequence'));
         });
 }
 
@@ -265,6 +290,40 @@ function addSequenceButton(div, id, name) {
     newButton.text('Play "' + name + '"');
     // Add to parent div
     div.append(newButton);
+}
+
+function updateSequencesInSelect(sequencesSelect) {
+    // Remove all existing sequence buttons
+    sequencesSelect.empty();
+    // Add empty/none option
+    sequencesSelect.append($('<option selected value="">None</option>'));
+    // Do we have available sequences?
+    if (sequences != null && sequences instanceof Array) {
+        /// Success
+        sequences.forEach((seq) => {
+            // Is this a valid object?
+            if (seq instanceof Object) {
+                // Get ID
+                if("id" in seq && "name" in seq) {
+                    let id = seq.id;
+                    let seqName = seq.name;
+                    // Add option
+                    addSequenceSelectOption(sequencesSelect, id, seqName);
+                }
+            }
+        });
+    } else {
+        /// ERROR - Do nothing
+    }
+}
+
+function addSequenceSelectOption(select, id, name) {
+    // Create button
+    let newOption = $('<option>' + name + '</option>');
+    // Set id
+    newOption.attr("value", id);
+    // Add to parent select
+    select.append(newOption);
 }
 
 function getSequenceName(id) {
@@ -358,10 +417,10 @@ function addBandToTable(bandsTableBody, band_id, band_name, seq_name) {
     td_buttons.append(div_buttons);
     tr.append(td_buttons);
     // Button - Edit
-    div_buttons.append($('<button type="button" class="btn btn-secondary" onclick="clickBandEdit(this)">Edit</button>')
+    div_buttons.append($('<button type="button" class="btn btn-secondary" onclick="buttonBandEdit(this)">Edit</button>')
         .attr("data-sequence", band_id));
     // Button - Delete
-    div_buttons.append($('<button type="button" class="btn btn-danger" onclick="clickBandDelete(this)">Delete</button>')
+    div_buttons.append($('<button type="button" class="btn btn-danger" onclick="buttonBandDelete(this)">Delete</button>')
         .attr("data-sequence", band_id));
     // Add row to table
     bandsTableBody.append(tr);
@@ -393,6 +452,10 @@ function buttonReadNewBand() {
             if (isMagicBand) str = str + " (MagicBand)";
             $('#readNewBand-result').text(str);
             enableReadNewBandButton();
+            // Show new band form and fill out id
+            clearAddNewBandForm();
+            $('#newBandBandId').val(id);
+            $('#addNewBandDiv').toggleClass('d-none', false);
         },
         function(jqXHR, textStatus, errorThrown) {
             // ERROR
@@ -402,9 +465,155 @@ function buttonReadNewBand() {
         });
 }
 
+function buttonAddNewBand() {
+    // Clear form
+    clearAddNewBandForm();
+    // Show form
+    $('#addNewBandDiv').toggleClass('d-none', false);
+}
+
+function buttonAddNewBandCancel() {
+    // Hide form
+    $('#addNewBandDiv').toggleClass('d-none', true);
+    // Clear form
+    clearAddNewBandForm();
+}
+
+function clearAddNewBandForm() {
+    // Clear form
+    $('#newBandBandId').val('');
+    $('#newBandNickname').val('');
+    $('#newBandSequence').val('');
+}
+
 function enableReadNewBandButton() {
     $('#button-readNewBand').removeAttr("disabled");
     $('#button-readerNewBand-spinner').toggleClass('d-none', true);
     $('#button-readNewBand-text').text("Read New Band");
+}
+
+function buttonAddNewBandSave() {
+    // Get values
+    let bandId = $('#newBandBandId').val();
+    let bandNickname = $('#newBandNickname').val();
+    let bandSequence = $('#newBandSequence').val();
+    // Validate
+    if (!isString(bandId) || bandId.length < 1) {
+        alert("Please enter a valid Band ID.");
+        return;
+    }
+    // API Call
+    makeApiCall('/band/' + bandId, 'PUT',
+        function(response, textStatus, jqXHR) {
+            // Success
+            data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && isDict(data)) {
+                // Success - Add to table
+                getKnownBandsList();
+                buttonAddNewBandCancel();
+            } else {
+                alert("Failed to add new band. Server returned empty result.");
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            // ERROR
+            console.debug("ERROR adding new band:" + errorThrown);
+            alert("Failed to add new band. Error contacting server.");
+        },
+        {id: bandId, name: bandNickname, sequence: bandSequence});
+}
+
+function getBandFromCache(band_id) {
+    // Check if bands are cached
+    if (bands != null && bands instanceof Array) {
+        // Loop through bands
+        for (let i = 0; i < bands.length; i++) {
+            let band = bands[i];
+            // Check if band_id matches
+            if (band instanceof Object && 'band_id' in band && band.band_id === band_id) {
+                // Found band
+                return band;
+            }
+        }
+    }
+    // Not found
+    return null;
+}
+
+function buttonBandEdit(element) {
+    // Get band id from data-sequence
+    let band_id = element.dataset.sequence;
+    console.debug('band_id: ' + band_id);
+    // Get band from cache
+    let band = getBandFromCache(band_id);
+    if (band == null) return;
+    // Get band data
+    let bandNickname = getStringFromDict(band, 'name');
+    let bandSequence = getStringFromDict(band, 'sequence');
+    // Populate edit bands form
+    $('#editBandBandId').val(band_id);
+    $('#editBandNickname').val(bandNickname);
+    $('#editBandSequence').val(bandSequence);
+    // Show edit bands form
+    $('#editBandModal').modal('show');
+}
+
+function buttonEditBandSave() {
+    // Get values
+    let bandId = $('#editBandBandId').val();
+    let bandNickname = $('#editBandNickname').val();
+    let bandSequence = $('#editBandSequence').val();
+    // Validate
+    if (!isString(bandId) || bandId.length < 1) {
+        alert("Please enter a valid Band ID.");
+        return;
+    }
+    // API Call
+    makeApiCall('/band/' + bandId, 'PUT',
+        function(response, textStatus, jqXHR) {
+            // Success
+            data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && isDict(data)) {
+                // Success - Add to table
+                getKnownBandsList();
+                // Hide modal
+                $('#editBandModal').modal('hide');
+            } else {
+                alert("Failed to add new band. Server returned empty result.");
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            // ERROR
+            console.debug("ERROR adding new band:" + errorThrown);
+            alert("Failed to add new band. Error contacting server.");
+        },
+        {id: bandId, name: bandNickname, sequence: bandSequence});
+}
+
+function buttonBandDelete(element) {
+    // Get band id from data-sequence
+    let band_id = element.dataset.sequence;
+    console.debug('band_id: ' + band_id);
+    // Confirm
+    if (!confirm("Are you sure you want to delete band " + band_id + "?")) {
+        return;
+    }
+    // API Call
+    makeApiCall('/band/' + band_id, 'DELETE',
+        function(response, textStatus, jqXHR) {
+            // Success
+            data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && isDict(data)) {
+                // Success - Remove from table
+                getKnownBandsList();
+            } else {
+                alert("Failed to delete band. Server returned empty result.");
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            // ERROR
+            console.debug("ERROR deleting band:" + errorThrown);
+            alert("Failed to delete band. Error contacting server.");
+        });
 }
 

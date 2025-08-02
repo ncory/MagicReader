@@ -3,6 +3,8 @@ from serial.tools import list_ports
 
 from magicreader.bandManager import BandManager
 
+VERBOSE = False
+
 try:
     # Create band manager
     band_manager = BandManager()
@@ -21,19 +23,21 @@ try:
 
     # While loop
     while True:
-        print("Waiting for RFID read...")
+        if VERBOSE:
+            print("Waiting for RFID read...")
         # Read to next line
         line = ser.readline()
         print(f"Read data: {line}")
-        # Convert to ASCII
-        ascii = line.decode('ascii').strip()
-        print(f"\tASCII: {ascii}")
-        # Convert to UTF-8
-        utf8 = line.decode('utf-8').strip()
-        print(f"\tUTF-8: {utf8}")
-        # Does it match as a Disney band?
-        if (band_manager.isIdDisneyBand(utf8)):
-            print("\tIs a Disney band")
+        if VERBOSE:
+            # Convert to ASCII
+            ascii = line.decode('ascii').strip()
+            print(f"\tASCII: {ascii}")
+            # Convert to UTF-8
+            utf8 = line.decode('utf-8').strip()
+            print(f"\tUTF-8: {utf8}")
+            # Does it match as a Disney band?
+            #if (band_manager.isIdDisneyBand(utf8)):
+                #print("\tIs a Disney band")
 
 except KeyboardInterrupt:
     print("Caught keyboard interrupt...exiting")

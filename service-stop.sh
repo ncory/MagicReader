@@ -1,8 +1,10 @@
 #!/bin/bash
 # This script stops MagicReader.service and disables the service
 
-# Stop service
+# Stop services
 sudo systemctl stop MagicReader.service
+sudo systemctl stop MagicWand.service
 
-# Enable service
+# Disable services
 sudo systemctl disable MagicReader.service
+sudo systemctl disable MagicWand.service

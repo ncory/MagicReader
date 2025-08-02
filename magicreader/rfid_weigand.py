@@ -38,6 +38,7 @@ class RfidWeigand(rfid.RfidReader):
                 # Pass to event queue
                 read = rfid.RfidRead(id, self.isDisneyBand(id))
                 event = AppEvent(AppEventType.ReadRfid, read)
+                print(f"RFID:: isDisneyBand: {read.isDisney}", flush=True)
                 self.app.event_queue.put((5, event))
             except CancelReadException:
                 print("RFID:: Got CancelReadException!!", flush=True)

@@ -1,0 +1,15 @@
+[Unit]
+Description=MagicWand
+Wants=NetworkManager-wait-online.service
+After=NetworkManager-wait-online.service
+#After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=false
+User=pi
+#WorkingDirectory=/home/pi/magicreader
+ExecStart=/home/pi/magicreader/MagicWand.sh
+
+[Install]
+WantedBy=multi-user.target
