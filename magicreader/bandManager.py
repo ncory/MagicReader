@@ -94,7 +94,7 @@ class BandManager:
     def loadFromFile(self):
         try:
             # Load json file
-            with open('bands.json', 'r') as file:
+            with open('data/bands.json', 'r') as file:
                 data = json.load(file)
                 # Validate loaded object
                 if data is not None and isinstance(data, dict):
@@ -109,7 +109,7 @@ class BandManager:
     def saveToFile(self):
         try:
             # Save as json to file
-            with open('bands.json', 'w') as file:
+            with open('data/bands.json', 'w') as file:
                 json.dump(self.bands, file)
                 return True
         except:

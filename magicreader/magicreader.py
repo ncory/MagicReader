@@ -36,7 +36,7 @@ if sys.version_info.major < 3:
     sys.exit("This script requires Python 3")
 
 # Read config file
-with open('settings.json', 'r') as file:
+with open('data/settings.json', 'r') as file:
     data = json.load(file)
 config = data
 settings = config['settings']
