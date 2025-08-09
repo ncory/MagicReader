@@ -10,7 +10,7 @@
     <script src="/static/bootstrap.bundle.min.js"></script>
     <script src="/static/magicreaderclient.js"></script>
 </head>
-<body onload="onLoadBandsPage()">
+<body onload="onLoadSquencesPage()">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a href="#" class="navbar-brand">MagicReader</a>
@@ -22,8 +22,8 @@
                 <div class="navbar-nav">
                     <a href="/" class="nav-item nav-link">Controls</a>
                     <a href="#" class="nav-item nav-link">Settings</a>
-                    <a href="#" class="nav-item nav-link active">Bands</a>
-                    <a href="#" class="nav-item nav-link">Sequences</a>
+                    <a href="/bands.html" class="nav-item nav-link">Bands</a>
+                    <a href="#" class="nav-item nav-link active">Sequences</a>
                 </div>
                 <div class="navbar-nav ms-auto">
                     <div class="nav-item dropdown">
@@ -31,9 +31,9 @@
                             System
                           </a>
                           <ul class="dropdown-menu">
-                            <li><a class="dropdown-item bg-info text-light" href="#" onclick="controlMagicWand()">Magic Wand</a></li>
-                            <li><a class="dropdown-item bg-warning text-light" href="#" onclick="controlReboot()">Reboot</a></li>
-                            <li><a class="dropdown-item bg-danger text-light href="#" onclick="controlShutdown()">Shutdown</a></li>
+                            <li><a class="dropdown-item bg-info text-light" href="#" onclick="showControlModalMagicWand()">Magic Wand</a></li>
+                            <li><a class="dropdown-item bg-warning text-light" href="#" onclick="showControlModalReboot()">Reboot</a></li>
+                            <li><a class="dropdown-item bg-danger text-light" href="#" onclick="showControlModalShutdown()">Shutdown</a></li>
                           </ul>
                     </div>
                 </div>
@@ -91,22 +91,26 @@
         </div>
 
         <div class="p-3 mb-3 bg-light rounded-3 conainer">
-            <h4>Known Bands</h4>
+            <h4>Sequences</h4>
             <div class="table-responsive">
-                <table class="table table-sm table-striped align-middle" id="bandsTable">
+                <table class="table table-sm table-striped align-middle" id="sequencesTable">
                     <thead>
                         <tr>
                             <th scope="col">ID</th>
-                            <th scope="col">Nickname</th>
-                            <th scope="col">Sequence</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">WLED</th>
+                            <th scope="col">Music</th>
+                            <th scope="col">Actions</th>
                             <th scope="col"></th>
                         </tr>
                     </thead>
-                    <tbody id="bandsTable_body">
+                    <tbody id="sequencesTable_body">
                         <tr>
-                            <td>1234567890</td>
-                            <td>Nate's Blue Band</td>
-                            <td>Happily Ever After</td>
+                            <td>epcot-anthem</td>
+                            <td>EPCOT Anthem</td>
+                            <td>(none)</td>
+                            <td>EPCOT_Anthem.wav</td>
+                            <td>3</td>
                             <td>
                                 <div class="btn-group" role="group">
                                     <button type="button" class="btn btn-secondary">Edit</button>
@@ -115,9 +119,11 @@
                             </td>
                         </tr>
                         <tr>
-                            <td>0987654321</td>
-                            <td>EPCOT 40th Band</td>
-                            <td>Epcot 40th Anniversary</td>
+                            <td>HappilyEverAfter</td>
+                            <td>Happily Ever After</td>
+                            <td>(none)</td>
+                            <td>HappilyEverAfter.mp3</td>
+                            <td>4</td>
                             <td>
                                 <div class="btn-group" role="group">
                                     <button type="button" class="btn btn-secondary">Edit</button>
@@ -130,7 +136,7 @@
                 </div>
         </div>
 
-        <!-- Edit Sequences Modal -->
+        <!-- Edit Band Modal -->
         <div class="modal fade" id="editBandModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -167,6 +173,14 @@
             </div>
         </div>
         </div>
+
+        <!-- MODALS -->
+        <div class="modal fade" id="controlModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered modal-lg controlModal">
+                <div class="modal-content" id="controlModalContent"></div>
+            </div>
+        </div>
+        <!-- END MODALS-->
 
     </div>
 </body>

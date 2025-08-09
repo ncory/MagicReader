@@ -53,3 +53,36 @@ body {
     margin-right: 5px;
     margin-bottom: 5px;
 }
+
+
+
+
+/* MODAL STYLES */
+
+.controlModal {
+    width: 514px;
+}
+
+.modal-tinkerbell {
+    width: 512px;
+    height: 786px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+
+.modal-magicWand {
+    background-image: url('/static/images/Tinkerbell-MagicWand-sm.jpg');
+}
+
+.modal-reboot {
+    background-image: url('/static/images/Tinkerbell-Reboot-sm.jpg');
+}
+
+.modal-shutdown {
+    background-image: url('/static/images/Tinkerbell-Shutdown-sm.jpg');
+}
+
+.modal-background-shutdown {
+    background-color: #1c1b1b;
+}

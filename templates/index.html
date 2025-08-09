@@ -23,7 +23,7 @@
                     <a href="#" class="nav-item nav-link active">Controls</a>
                     <a href="#" class="nav-item nav-link">Settings</a>
                     <a href="bands.html" class="nav-item nav-link">Bands</a>
-                    <a href="#" class="nav-item nav-link">Sequences</a>
+                    <a href="/static/test.html" class="nav-item nav-link">Sequences</a>
                 </div>
                 <div class="navbar-nav ms-auto">
                     <div class="nav-item dropdown">
@@ -31,9 +31,9 @@
                             System
                           </a>
                           <ul class="dropdown-menu">
-                            <li><a class="dropdown-item bg-info text-light" href="#" onclick="controlMagicWand()">Magic Wand</a></li>
-                            <li><a class="dropdown-item bg-warning text-light" href="#" onclick="controlReboot()">Reboot</a></li>
-                            <li><a class="dropdown-item bg-danger text-light href="#" onclick="controlShutdown()">Shutdown</a></li>
+                            <li><a class="dropdown-item bg-info text-light" href="#" onclick="showControlModalMagicWand()">Magic Wand</a></li>
+                            <li><a class="dropdown-item bg-warning text-light" href="#" onclick="showControlModalReboot()">Reboot</a></li>
+                            <li><a class="dropdown-item bg-danger text-light" href="#" onclick="showControlModalShutdown()">Shutdown</a></li>
                           </ul>
                     </div>
                 </div>
@@ -69,6 +69,14 @@
             <div class="sequences d-grid gap-2 d-md-block" id="tapInPresets">
             </div>
         </div>
+
+        <!-- MODALS -->
+        <div class="modal fade" id="controlModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered modal-lg controlModal" id="controlModalDialog">
+                <div class="modal-content" id="controlModalContent"></div>
+            </div>
+        </div>
+        <!-- END MODALS-->
 
     </div>
 </body>

@@ -716,3 +716,57 @@ function buttonBandDelete(element) {
         });
 }
 
+
+/////// System Control Modals ///////
+
+function showControlModalMagicWand() {
+    $('#controlModalContent').removeClass('modal-background-shutdown');
+    showControlModal('magicWand');
+}
+
+function showControlModalReboot() {
+    $('#controlModalContent').removeClass('modal-background-shutdown');
+    showControlModal('reboot');
+}
+
+function showControlModalShutdown() {
+    $('#controlModalContent').addClass('modal-background-shutdown');
+    showControlModal('shutdown');
+}
+
+function showControlModal(name) {
+    // Load modal content
+    let modalContent = $('#controlModalContent');
+    modalContent.empty();
+    modalContent.load("/static/modal-control-" + name + ".html",
+        function(response, status, xhr) {
+            if (status === "error") {
+                console.debug("ERROR loading modal content: " + xhr.status + " " + xhr.statusText);
+                modalBody.text("Error loading modal content.");
+            }
+        }); 
+    // Show modal
+    $('#controlModal').modal('show');
+}
+
+function confirmControlModalMagicWand() {
+    // Call API
+    controlMagicWand();
+    // Hide modal
+    $('#controlModal').modal('hide');
+}
+
+function confirmControlModalReboot() {
+    // Call API
+    controlReboot();
+    // Hide modal
+    $('#controlModal').modal('hide');
+}
+
+function confirmControlModalShutdown() {
+    // Call API
+    controlShutdown();
+    // Hide modal
+    $('#controlModal').modal('hide');
+}
+
