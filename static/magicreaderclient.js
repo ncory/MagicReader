@@ -1,5 +1,6 @@
 
 /////// Global Variables ///////
+var tapInPresets = null;
 var sequences = null;
 var bands = null;
 var statusCache = null;
@@ -54,6 +55,7 @@ function getBoolFromDict(dict, key, returnFalseNotNull = true) {
 $(function() {
     // Initial updates
     updateStatus();
+    getTapInPresetsList();
     getSequenceList();
     // Regular status updates
     setInterval(updateStatus, 1000);
@@ -61,6 +63,7 @@ $(function() {
 
 function onLoadMainPage() {
     displaySequences();
+    displayTapInPresets();
 }
 
 function onLoadBandsPage() {
@@ -123,6 +126,15 @@ function controlMagicWand() {
     makeApiCall('/control/magicWand');
 }
 
+function playTapInPreset(element) {
+    // Get preset id from data-id
+    let id = element.dataset.id
+    console.debug('playing tap-in: ' + id);
+    // Call API
+    makeApiCall('/control/tapInPreset/' + id);
+    console.debug('done with tap-in API call');
+}
+
 function playSequence(element) {
     // Get sequence name from data-sequence
     let sequence = element.dataset.sequence
@@ -173,6 +185,15 @@ function displayStatus() {
             case "success":
                 statusDiv.text("Read ID - Success!");
                 break;
+            case "playingTapIn":
+                // Do we have a tap-in preset id?
+                if (statusCache.lastTapInPreset != null && statusCache.lastTapInPreset != '') {
+                    statusDiv.text("Playing Tap-In: " + getTapInName(statusCache.lastTapInPreset));
+                }
+                else {
+                    statusDiv.text("Playing Tap-In");
+                }
+                break;
             case "playingSequence":
                 // Do we have a sequence name?
                 if (statusCache.status != null && statusCache.status != '') {
@@ -221,6 +242,84 @@ function displayStatus() {
         $("#status-message").text("<< ERROR Loading Status >>").toggleClass('bg-danger', true);
         $("#status-readAllowed").text("");
     }
+}
+
+
+/////// Tap-In Functions ///////
+
+function getTapInPresetsList() {
+    // API Call
+    makeApiCall('/tapInPresets', 'GET',
+        function(response, textStatus, jqXHR) {
+            // Success
+            // Cache tap-in presets list
+            tapInPresets = response.data;
+            // Display tap-in presets buttons
+            displayTapInPresets();
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            // ERROR
+            console.debug("ERROR loading tap-in presets:" + errorThrown);
+            tapInPresets = null;
+            // Display tap-in presets buttons
+            displayTapInPresets();
+        });
+}
+
+function getTapInName(id) {
+    if (tapInPresets != null && tapInPresets instanceof Array) {
+        var foundName = id;
+        tapInPresets.forEach((preset) => {
+            if("id" in preset) {
+                if (id == preset.id && "name" in preset) {
+                    foundName = preset.name;
+                }
+            }
+        });
+        return foundName;
+    }
+    return id;
+}
+
+function displayTapInPresets() {
+    // Remove all existing tap-in buttons
+    let presetsDiv = $('#tapInPresets');
+    presetsDiv.empty();
+    // Do we have available presets?
+    if (tapInPresets != null && tapInPresets instanceof Array) {
+        /// Success
+        tapInPresets.forEach((preset) => {
+            // Is this a valid object?
+            if (preset instanceof Object) {
+                // Get ID
+                if("id" in preset) {
+                    let id = preset.id;
+                    let presetName;
+                    // Name or use id?
+                    if ("name" in preset) {
+                        presetName = preset.name;
+                    } else {
+                        presetName = id;
+                    }
+                    // Add button
+                    addTapInPresetButton(presetsDiv, id, presetName);
+                }
+            }
+        });
+    } else {
+        /// ERROR - Do nothing
+    }
+}
+
+function addTapInPresetButton(div, id, name) {
+    // Create button
+    let newButton = $('<button type="button" class="sequence-button btn btn-primary" onclick="playTapInPreset(this)"></button>');
+    // Set id
+    newButton.attr("data-id", id);
+    // Set name
+    newButton.text(name);
+    // Add to parent div
+    div.append(newButton);
 }
 
 

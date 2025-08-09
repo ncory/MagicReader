@@ -45,6 +45,7 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     def status():
         statusDict = {
             "state": magicreader.state.value,
+            "lastTapInPreset": magicreader.lastTapInPreset,
             "status": magicreader.status,
             "isError": magicreader.isError,
             "allowRead": magicreader.allowRead
@@ -75,6 +76,16 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     def control_disableRead():
         magicreader.api_disableRead()
         return {"result": "ok"}
+    
+    @app.route('/control/tapInPreset/<id>')
+    def control_tapInPreset(id):
+        success = False
+        # Play tap-in preset
+        if id is not None:
+            magicreader.api_playPlayTapInPreset(id)
+            return {"result": "ok"}
+        # Failed if we got here
+        return {"result": "error"}
     
     @app.route('/control/sequence/<sequence_name>')
     def control_sequence(sequence_name):
@@ -109,6 +120,19 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
         #os.system("/home/pi/magicreader/MagicWand.sh")
         os.system("sudo systemctl start MagicWand.service")
         return {"result": "ok"}
+    
+
+    ###### Tap-In Presets ######
+
+    @app.route('/tapInPresets')
+    def get_tapInPresets():
+        # Get list of sequences from app
+        presets = magicreader.api_getTapInPresetsList()
+        # Return data
+        return {
+            "result": "ok",
+            "data": presets
+        }
     
 
     ###### Sequences ######

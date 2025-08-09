@@ -8,10 +8,10 @@
         "wled_preset_waiting": 8,
         "wled_preset_success": 10,
         "wled_preset_error": 13,
-        "sound_startup": "Sounds/Startup.wav",
+        "sound_startup": "Startup.wav",
         "sound_waiting": null,
-        "sound_success": "Sounds/TapIn.wav",
-        "sound_error": "Sounds/Error.wav",
+        "sound_success": "TapIn.wav",
+        "sound_error": "Error.wav",
         "startup_read_delay": 3,
         "success_action_delay": 2,
         "error_read_delay": 5,
@@ -128,62 +128,74 @@
         "generic": {
             "name": "Generic",
             "sound": "Tap In - Generic.wav",
-            "wled_preset": 10
+            "duration": 2,
+            "wled_preset": 100
         },
         "hm-bugle": {
             "name": "HM - Bugle",
             "sound": "Tap In - Bugle.wav",
-            "wled_preset": 21
+            "duration": 4,
+            "wled_preset": 101
         },
         "hm-crow": {
             "name": "HM - Crow",
             "sound": "Tap In - Crow.wav",
-            "wled_preset": 22
+            "duration": 4,
+            "wled_preset": 102
         },
         "hm-doorbell": {
             "name": "HM - Doorbell",
             "sound": "Tap In - Doorbell.wav",
-            "wled_preset": 23
+            "duration": 13,
+            "wled_preset": 103
         },
         "hm-frees-laugh": {
             "name": "HM - Frees Laugh",
             "sound": "Tap In - Frees Laugh.wav",
-            "wled_preset": 24
+            "duration": 4,
+            "wled_preset": 104
         },
         "hm-frees-there-and-just": {
             "name": "HM - Frees There You Are and Just In Time",
             "sound": "Tap In - Frees There You Are and Just In Time.wav",
-            "wled_preset": 25
+            "duration": 5,
+            "wled_preset": 105
         },
         "hm-frees-there":{
             "name": "HM - Frees There You Are",
             "sound": "Tap In - Frees There You Are.wav",
-            "wled_preset": 26
+            "duration": 3,
+            "wled_preset": 106
         },
         "hm-leota-bell": {
             "name": "HM - Leota Bell",
             "sound": "Tap In - Leota Bell.wav",
-            "wled_preset": 27
+            "duration": 5,
+            "wled_preset": 107
         },
         "hm-leota-beyond": {
             "name": "HM - Leota Beyond",
             "sound": "Tap In - Leota Beyond.wav",
-            "wled_preset": 28
+            "duration": 5,
+            "wled_preset": 108
         },
         "hm-leota-spirits": {
             "name": "HM - Leota Spirits",
             "sound": "Tap In - Leota Spirits.wav",
-            "wled_preset": 29
+            "duration": 5,
+            "wled_preset": 109
         },
         "hm-music": {
             "name": "HM - Music",
             "sound": "Tap In - Music.wav",
-            "wled_preset": 30
+            "duration": 5,
+            "wled_preset": 110
         },
         "hm-seanc-horn": {
             "name": "HM - Seance Horn",
             "sound": "Tap In - Seance Horn.wav",
-            "wled_preset": 31
+            "duration": 3,
+            "wled_preset": 111
         }
     }
 }

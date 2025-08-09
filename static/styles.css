@@ -46,8 +46,10 @@ body {
 
 .sequences {
     margin-top: 5px;
+    padding-bottom: -5px;
 }
 
 .sequence-button {
     margin-right: 5px;
+    margin-bottom: 5px;
 }
