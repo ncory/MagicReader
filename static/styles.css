@@ -59,16 +59,30 @@ body {
 
 /* MODAL STYLES */
 
-.controlModal {
-    width: 514px;
+@media (max-width: 575.98px) {
+    .controlModal {
+        width: 258px;
+    }
+    .modal-tinkerbell {
+        width: 256px;
+        height: 393px;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+    }
 }
 
-.modal-tinkerbell {
-    width: 512px;
-    height: 786px;
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: contain;
+@media (min-width: 576px) {
+    .controlModal {
+        width: 514px;
+    }
+    .modal-tinkerbell {
+        width: 512px;
+        height: 786px;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+    }
 }
 
 .modal-magicWand {

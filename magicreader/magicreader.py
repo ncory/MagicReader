@@ -799,19 +799,7 @@ class MagicBand():
     def api_playPlayTapInPreset(self, id: str):
         # Push event
         self.event_queue.put((2, AppEvent(AppEventType.PlayTapInPreset, id)))
-    
-    def api_getSequencesList(self):
-        # Create list of sequences and names
-        list = []
-        # Iterate sequences
-        for key, value in sequences.items():
-            if 'name' in value:
-                list.append({"id": key, "name": value.get('name')})
-            else:
-                list.append({"id": key})
-        # Return
-        return list
-    
+        
     def api_getSoundsList(self):
         # Create list of sound files
         list = self.soundManager.listAllSoundFiles()

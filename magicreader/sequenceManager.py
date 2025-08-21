@@ -48,6 +48,15 @@ class SequenceManager:
 
 ######### Accessors #########
 
+    def getSequenceNamesList(self) -> list:
+        # Create list to hold data
+        list = []
+        # Iterate sequences
+        for id, sequence in self.sequences.items():
+            list.append({"id": id, "name": sequence.name})
+        # Return list
+        return list
+
     def getSequenceById(self, id: str):
         """Returns sequence by id or None if not found"""
         if isinstance(id, str) and id in self.sequences:
@@ -57,7 +66,7 @@ class SequenceManager:
     def updateSequence(self, sequence: Sequence):
         """Updates or adds a sequence. Will overwrite existing values."""
         if isinstance(sequence, Sequence):
-            self.sequences[sequence.id] = sequence.__dict__
+            self.sequences[sequence.id] = sequence
             return True
         return False
     
