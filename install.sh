@@ -46,5 +46,12 @@ echo "Activating virtual environment..."
 source "$VENV_NAME/bin/activate"
 echo "Virtual environment activated."
 
-#### Install PIP package requirements
+##### Install PIP package requirements
 pip install RPi.GPIO pygame Flask httplib2 spidev ordered_enum mfrc522 pyserial
+
+##### Install services
+cd "$TARGET_DIR"
+./service-install.sh
+
+##### Finished
+echo "Finished installing MagicReader. Please reboot your Raspberry Pi to apply all changes."
