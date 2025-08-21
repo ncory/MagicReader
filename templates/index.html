@@ -51,13 +51,13 @@
             <div class="h4 status-readAllowed" id="status-readAllowed">RFID Read Allowed</div>
         </div>
 
-        <div class="p-3 mb-3 bg-light rounded-3 controls">
+        <div class="p-3 mb-3 bg-light rounded-3 controls d-grid gap-2 d-md-block">
             <button type="button" class="btn btn-dark" onclick="controlBlackout()">Blackout</button>
             <button type="button" class="btn btn-success" onclick="controlWait()">Wait for Tap</button>
             <button type="button" id="button-allowRead" class="btn btn-secondary" onclick="controlAllowRead()">Allow RFID Read</button>
         </div>
 
-        <div class="p-3 mb-3 bg-light rounded-3 conainer">
+        <div class="p-3 mb-3 bg-light rounded-3">
             <h4>Sequences</h4>
             <div class="sequences d-grid gap-2 d-md-block" id="sequences">
                 <button data-sequence="any1" type="button" class="sequence-button btn btn-primary" onclick="playSequence(this)">Play "Epcot Anthem"</button>
