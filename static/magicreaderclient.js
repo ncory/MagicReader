@@ -720,17 +720,26 @@ function buttonBandDelete(element) {
 /////// System Control Modals ///////
 
 function showControlModalMagicWand() {
-    $('#controlModalContent').removeClass('modal-background-shutdown');
+    $('#controlModalContent')
+        .removeClass('modal-background-reboot')
+        .removeClass('modal-background-shutdown')
+        .addClass('modal-background-reboot');
     showControlModal('magicWand');
 }
 
 function showControlModalReboot() {
-    $('#controlModalContent').removeClass('modal-background-shutdown');
+    $('#controlModalContent')
+        .removeClass('modal-background-magicWand')
+        .removeClass('modal-background-shutdown')
+        .addClass('modal-background-reboot');
     showControlModal('reboot');
 }
 
 function showControlModalShutdown() {
-    $('#controlModalContent').addClass('modal-background-shutdown');
+    $('#controlModalContent')
+        .removeClass('modal-background-magicWand')
+        .removeClass('modal-background-reboot')
+        .addClass('modal-background-shutdown');
     showControlModal('shutdown');
 }
 

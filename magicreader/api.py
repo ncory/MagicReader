@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from flask import Flask, jsonify, request, render_template
 from magicreader import MagicBand
+from sequenceManager import SequenceManager
 import platform
 import os
 #import requests
@@ -87,14 +88,14 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
         # Failed if we got here
         return {"result": "error"}
     
-    @app.route('/control/sequence/<sequence_name>')
-    def control_sequence(sequence_name):
+    @app.route('/control/sequence/<seq_id>')
+    def control_sequence(seq_id):
         success = False
         # Get matching sequence
-        sequence = magicreader.lookupSequence(sequence_name)
+        sequence = magicreader.sequence_manager.getSequenceById(seq_id)
         # Play sequence
         if sequence is not None:
-            magicreader.api_playSequence(sequence_name)
+            magicreader.api_playSequence(seq_id)
             #success = magicreader.playSequence(sequence, sequence_name)
             return {"result": "ok"}
         # Failed if we got here

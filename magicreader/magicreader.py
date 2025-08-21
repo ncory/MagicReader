@@ -10,26 +10,26 @@ import random
 import sys
 import os
 from json import dumps
-from httplib2 import Http
+#from httplib2 import Http
 from mfrc522 import SimpleMFRC522
 import RPi.GPIO as GPIO
 import signal
 import threading
 import queue
 import datetime
-import socket
 from functools import total_ordering
 from helpers import State, AppEvent, AppEventType, CancelReadException
 from bandManager import BandManager
+from sequenceManager import SequenceManager
+from soundManager import SoundManager
 from rfid import RfidRead, RfidReader
 from rfid_mfrc522 import RfidMfrc522
 from rfid_weigand import RfidWeigand
+from sequence import Sequence
+from rest import RestHelpers
+from wled import WLEDManager
 
 print("Starting...", flush=True)
-
-# Import PyGame for sound playback and hide prompts
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
 
 # Check Python version
 if sys.version_info.major < 3:
@@ -43,17 +43,11 @@ settings = config['settings']
 tap_in_presets = config['tapInPresets']
 print_band_id = bool(settings['print_band_id'])
 #bands = config['bands']
-sequences = config['sequences']
+#sequences = config['sequences']
 
 # Setup logging
 log = logging.getLogger('main')
 log.setLevel(logging.CRITICAL)
-
-print("Starting PyGame", flush=True)
-# Setup PyGame (Pre init helps to get rid of sound lag)
-pygame.mixer.pre_init(44100, -16, 1, 4096 )
-pygame.mixer.init()
-pygame.init()
 
 print("Finished Config Loading", flush=True)
 
@@ -65,6 +59,9 @@ class MagicBand():
     def __init__(self):
         # Create managers
         self.band_manager = BandManager()
+        self.sequence_manager = SequenceManager()
+        self.soundManager = SoundManager()
+        self.wledManager = WLEDManager(settings['wled_address'])
         # Set flags and status
         self.state = State.Uknown
         self.allowRead = False
@@ -79,7 +76,7 @@ class MagicBand():
         self.read_once_enabled = False
         self.read_once_result = None
         # Create http object to use later
-        self.http_obj = Http()
+        #self.http_obj = Http()
         # Create queue
         self.event_queue = queue.PriorityQueue()
         self.event_thread = None
@@ -92,12 +89,20 @@ class MagicBand():
         else:
             self.reader = None
         # Pre-load all sound files
-        self.loadAllSounds()
+        self.soundManager.preLoadSound("startup", settings['sound_startup'])
+        self.soundManager.preLoadSound("waiting", settings['sound_waiting'])
+        self.soundManager.preLoadSound("success", settings['sound_success'])
+        self.soundManager.preLoadSound("error", settings['sound_error'])
     
     def run(self):
         """Starts the application"""
         # Load bands from file
         if not self.band_manager.loadFromFile():
+            print("ERROR: Failed to load bands from file", flush=True)
+            return False
+        # Load sequences from file
+        if not self.sequence_manager.loadFromFile():
+            print("ERROR: Failed to load sequences from file", flush=True)
             return False
         # Set active flag
         self.is_active = True
@@ -134,10 +139,9 @@ class MagicBand():
         # Stop RIFD reader
         self.reader.stop()
         # Trigger blackout on LEDs
-        self.callLedPreset(settings['wled_preset_black'])
+        self.wledManager.callLedPreset(settings['wled_preset_black'])
         # Stop all sound
-        pygame.mixer.stop()
-        pygame.mixer.music.stop()
+        self.soundManager.stopAllSounds()
         # Cleanup GPIO
         GPIO.cleanup()
 
@@ -282,10 +286,7 @@ class MagicBand():
                 self.event_queue.put((2, AppEvent(AppEventType.EnterWaitMode)))
             elif event.type == AppEventType.PlaySequence:
                 # PLAY SEQUENCE
-                # Lookup sequence
-                sequence = self.lookupSequence(event.data)
-                # Play sequence
-                self.playSequence(sequence, event.data)
+                self.playSequence(event.data)
             elif event.type == AppEventType.StopSequence:
                 # STOP SEQUENCE
                 # Stop music
@@ -409,7 +410,7 @@ class MagicBand():
         # Set state
         self.setState(State.Checking)
         # Stop any music playback
-        self.stopMusic()
+        self.soundManager.stopMusic()
         # Convert band_id to str
         if not isinstance(band_id, str):
             print("Converting to string", flush=True)
@@ -418,10 +419,10 @@ class MagicBand():
             print(f"Read MagicBand ID: {band_id}", flush=True)
         # Lookup sequence name for band id
         print("Looking up band id", flush=True)
-        name = self.band_manager.lookupBandId(band_id, isDisney)
+        seq_id = self.band_manager.lookupBandId(band_id, isDisney)
         # Get matching sequence
         print("Looking up sequence", flush=True)
-        sequence = self.lookupSequence(name)
+        sequence = self.sequence_manager.getSequenceById(seq_id)
         if sequence is None:
             print("ERROR: found no sequnce to run!", flush=True)
             self.onError("Found no sequence to run!")
@@ -437,7 +438,7 @@ class MagicBand():
         time.sleep(settings['success_action_delay'])
         '''
         # Run sequence
-        if not self.playSequence(sequence, name):
+        if not self.playSequence(seq_id):
             # Error!
             self.onError("Failed to playback sequence")
     
@@ -478,7 +479,7 @@ class MagicBand():
             print("No sequence name found", flush=True)
             return None
     '''
-
+    '''
     def lookupSequence(self, name):
         """Looks up sequence for specified name"""
         found_sequences = []
@@ -490,6 +491,7 @@ class MagicBand():
                     return found
         # If we got here, we didn't find it
         return None
+    '''
 
 
     ######### Trigger Functions for LEDs and sounds #########
@@ -497,30 +499,30 @@ class MagicBand():
     def triggerStartup(self):
         """Triggers 'Startup' LED sequence and sound. Called when app first launches."""
         # Play sound
-        self.playSound(self.sound_startup)
+        self.soundManager.playSound("startup")
         # Trigger LED sequence
-        self.callLedPreset(settings['wled_preset_startup'])
+        self.wledManager.callLedPreset(settings['wled_preset_startup'])
 
     def triggerWaiting(self):
         """Triggers 'Waiting' LED sequence and sound. Called when app enters read loop and is waiting for an RFID read."""
         # Play sound
-        self.playSound(self.sound_waiting)
+        self.soundManager.playSound("waiting")
         # Trigger LED sequence
-        self.callLedPreset(settings['wled_preset_waiting'])
+        self.wledManager.callLedPreset(settings['wled_preset_waiting'])
 
     def triggerReadSuccess(self):
         """Triggers 'Success' LED sequence and sound. Called after successful ID lookup."""
         # Play sound
-        self.playSound(self.sound_success)
+        self.soundManager.playSound("success")
         # Trigger LED sequence
-        self.callLedPreset(settings['wled_preset_success'])
+        self.wledManager.callLedPreset(settings['wled_preset_success'])
         
     def triggerError(self):
         """Triggers 'Error' LED sequence and sound."""
         # Play sound
-        self.playSound(self.sound_error)
+        self.soundManager.playSound("error")
         # Trigger LED sequence
-        self.callLedPreset(settings['wled_preset_error'])
+        self.wledManager.callLedPreset(settings['wled_preset_error'])
     
     def triggerBlackout(self):
         """Turns off LEDs, stops all sounds, and cancels any pending RFID read actions"""
@@ -530,73 +532,13 @@ class MagicBand():
             self.read_once_enabled = False
             self.read_once_result = None
         # Stop all sound
-        pygame.mixer.stop()
-        pygame.mixer.music.stop()
+        self.soundManager.stopAllSounds()
         # Recall black LED preset
-        self.callLedPreset(settings['wled_preset_black'])
-    
-
-    ######### Sound functions #########
-
-    def loadAllSounds(self):
-        """Loads all preset sound files"""
-        self.sound_startup = self.loadSound(settings['sound_startup'])
-        self.sound_waiting = self.loadSound(settings['sound_waiting'])
-        self.sound_success = self.loadSound(settings['sound_success'])
-        self.sound_error = self.loadSound(settings['sound_error'])
-
-    def loadSound(self, filename: str):
-        """Pre-loads the specified file as a PyGame sound object"""
-        # Append 'Sounds/' to filename
-        if filename is None or not isinstance(filename, str) or filename == '':
-            return None
-        if not filename.startswith('Sounds/'):
-            filename = 'Sounds/' + filename
-        # Check if file exists
-        if not path.exists(filename):
-            print("Missing sound file :" + filename, flush=True)
-            return None
-        # Load file into memory as a PyGame Sound instance
-        try:
-            return pygame.mixer.Sound(filename)
-        except Exception as e:
-            print("Error loading sound", flush=True)
-            print(e, flush=True)
-            return None
-
-    def playSound(self, sound):
-        """Plays the specified sound object."""
-        print("Playing sound", flush=True)
-        if sound is not None:
-            try:
-                pygame.mixer.Sound.play(sound)
-            except Exception as e:
-                print("Error playing sound", flush=True)
-                print(e, flush=True)
-    
-    def playMusic(self, filename: str):
-        """Plays the specified file as PyGame music"""
-        # Check file
-        if filename is None or not isinstance(filename, str) or filename == '':
-            return
-        if not path.exists(filename):
-            print(f"Missing music file: {filename}", flush=True)
-            return
-        # Try playing as music
-        try:
-            pygame.mixer.music.load(filename)
-            pygame.mixer.music.play()
-        except Exception as e:
-            print(f"Error playing music file: {filename}", flush=True)
-            print(e, flush=True)
-    
-    def stopMusic(self):
-        """Stops any current music playback"""
-        pygame.mixer.music.stop()
-    
+        self.wledManager.callLedPreset(settings['wled_preset_black'])
+        
     
     ######### LED functions #########
-
+    '''
     def callLedPreset(self, preset: int):
         """Makes a REST call to the internal WLED instance to recall a preset."""
         # Chec input
@@ -606,7 +548,8 @@ class MagicBand():
         url = f"http://{settings['wled_address']}/win&PL={preset}"
         print(f"Calling LED preset: {url}", flush=True)
         # Make REST call
-        self.makeRestCall(url, 'GET')
+        RestHelpers.makeRestCall(url, 'GET')
+    '''
 
 
     ######### Tap-In Preset functions #########
@@ -626,12 +569,10 @@ class MagicBand():
                 self.lastTapInPreset = id
                 # Call WLED
                 if 'wled_preset' in preset and isinstance(preset['wled_preset'], int):
-                    self.callLedPreset(preset['wled_preset'])
+                    self.wledManager.callLedPreset(preset['wled_preset'])
                 # Play sound
                 if 'sound' in preset and isinstance(preset['sound'], str):
-                    sound = self.loadSound(preset['sound'])
-                    if sound is not None:
-                        self.playSound(sound)
+                    self.soundManager.playSoundFile(preset['sound'])
                 # Delay for duration of sound
                 if 'duration' in preset and (isinstance(preset['duration'], int) or isinstance(preset['duration'], float)):
                     duration = preset['duration']
@@ -644,41 +585,33 @@ class MagicBand():
 
     ######### Sequence functions #########
 
-    def playSequence(self, sequence, sequence_name: str = None):
-        """Play the selected sequence"""        
-        if sequence is None or not isinstance(sequence, dict):
+    def playSequence(self, id: str):
+        """Play the selected sequence"""
+        # Get sequence from sequence manager
+        sequence = self.sequence_manager.getSequenceById(id)
+        if sequence is None or not isinstance(sequence, Sequence):
             print("Invalid sequence", flush=True)
             return False
         # Disable further reads
         self.allowRead = False
         # Stop all music
-        self.stopMusic()
+        self.soundManager.stopMusic()
         # Set status
-        self.setState(State.PlayingSequence, sequence_name)
-        # Log sequence with name
-        if 'name' in sequence and isinstance(sequence['name'], str):
-            print(f"Playing sequence: {sequence['name']} ({sequence_name})")
-        # Is there an LED preset to recall?
-        if 'wled_action' in sequence:
-            self.callLedPreset(sequence.get('wled_action'))
-        # Play music
-        if 'music' in sequence:
-            self.playMusic(sequence.get('music'))
-        # Iterate actions
-        if 'actions' in sequence:
-            actions = sequence.get('actions')
-            if isinstance(actions, list):
-                for action in actions:
-                    if not self.performAction(action):
-                        return False
+        self.setState(State.PlayingSequence, sequence.name)
+        # Actually play the sequence
+        if not sequence.play(self.wledManager, self.soundManager):
+            print("Failed to play sequence", flush=True)
+            return False
         # Done playing sequence
         # Setup next read
+        # Use delay?
         delay = 0
+        if sequence.wait_delay is not None and isinstance(sequence.wait_delay, int):
+            delay = sequence.wait_delay
+        # Allow cancel?
         allow_read = True
-        if 'wait_delay' in sequence and isinstance(sequence['wait_delay'], int):
-            delay = sequence['wait_delay']
-        if 'cancel_allowed' in sequence and isinstance(sequence['cancel_allowed'], bool):
-            allow_read = sequence['cancel_allowed']
+        if sequence.cancel_allowed is not None and isinstance(sequence.cancel_allowed, bool):
+            allow_read = sequence.cancel_allowed
         if allow_read:
             read_delay = 2
         else:
@@ -688,7 +621,7 @@ class MagicBand():
 
 
     ######### Action functions #########
-
+    '''
     def performAction(self, action):
         """Performs the action based on type (URL, Brightsign)"""
         # Check for valid action dictionary
@@ -795,9 +728,12 @@ class MagicBand():
             print(f"Unknown action type: {type}", flush=True)
             return False
     
+    '''
 
+    '''
     ######### Web Hook Functions #########
 
+    @classmethod
     def makeRestCall(self, url, method = 'GET', playload = None, isJson = False):
         """Makes the specified HTTP call with an optional playlod and JSON content type."""
         print(f"REST Call: {method}: {url}", flush=True)
@@ -816,55 +752,8 @@ class MagicBand():
             #print(response, flush=True
         except Exception as e:
             print("Error making REST call", flush=True)
-            print(e, flush=True)
-    
-
-    ######### BrightSign Functions #########
-
-    def sendBrightSignCommand(address: str, port: int, command: str):
-        # Validate input
-        if address is None or not isinstance(address, str):
-            return
-        if port is None or not isinstance(port, int) or port <= 0 or port > 65535:
-            return
-        if command is None or not isinstance(command, str):
-            return
-        print(f"Sending '{command}' to {address}:{port}")
-        # Encode string to bytes
-        data = command.encode("utf-8")
-        #print(f"Message as bytes: {data}")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(data, (address, port))
-        print("Finished sending UDP")
-    
-
-    ######### Chromateq Functions #########
-
-    def sendChromateqSceneCommand(address: str, port: int, scene_id: int, area: int, status: bool):
-        # Validate input
-        if address is None or not isinstance(address, str):
-            return
-        if port is None or not isinstance(port, int) or port <= 0 or port > 65535:
-            return
-        if scene_id is None or not isinstance(scene_id, int) or scene_id < 0:
-            return
-        if status is None or not isinstance(status, bool):
-            return
-        print(f"Sending Chromateq scene command -  scene_id:{scene_id}, area: {area}, status: {status}  to {address}:{port}")
-        # Compose message as dict
-        message = {
-            "id": scene_id,
-            "a": area,
-            "s": status
-        }
-        # Encode as JSON
-        json_str = json.dumps(message)
-        # Encode JSN to bytes
-        data = json_str.encode("utf-8")
-        #print(f"Message as bytes: {data}")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(data, (address, port))
-        print("Finished sending UDP")
+            print(e, flush=True)    
+    '''
     
 
     ######### Web Api Calls #########
@@ -875,7 +764,7 @@ class MagicBand():
         
     def api_waitForTap(self):
         # Stop music
-        self.stopMusic()
+        self.soundManager.stopMusic()
         # Push event
         self.event_queue.put((2, AppEvent(AppEventType.EnterWaitMode)))
     
@@ -887,9 +776,9 @@ class MagicBand():
         # Disable RFID reads
         self.allowRead = False
     
-    def api_playSequence(self, name):
+    def api_playSequence(self, seq_id: str):
         # Push event
-        self.event_queue.put((2, AppEvent(AppEventType.PlaySequence, name)))
+        self.event_queue.put((2, AppEvent(AppEventType.PlaySequence, seq_id)))
     
     def api_stopSequence(self):
         # Push event
@@ -923,27 +812,15 @@ class MagicBand():
         # Return
         return list
     
-    '''
-    def api_getKnownBandsList(self):
-        # Create list of bands and sequence IDs
-        list = []
-        # Iterate bands
-        for key, value in bands.items():
-            if value is not None and isinstance(value, dict):
-                name = None
-                sequence = None
-                if 'name' in value:
-                    name = value.get('name')
-                    if name is not None and not isinstance(name, str):
-                        name = None
-                if 'sequence' in value:
-                    sequence = value.get('sequence')
-                    if sequence is not None and not isinstance(sequence, str):
-                        sequence = None
-                list.append({"band_id": key, "name": name, "sequence": sequence})
+    def api_getSoundsList(self):
+        # Create list of sound files
+        list = self.soundManager.listAllSoundFiles()
         # Return
         return list
-    '''
+    
+    def api_deleteSoundFile(self, filename: str):
+        # Delete sound file
+        return self.soundManager.deleteSoundFile(filename)
     
     def api_read_single_rfid(self) -> tuple[str, bool, bool]:
         # Temporarily disable reading

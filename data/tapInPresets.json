@@ -1,0 +1,74 @@
+{
+        "generic": {
+            "name": "Generic",
+            "sound": "Tap In - Generic.wav",
+            "duration": 2,
+            "wled_preset": 100
+        },
+        "hm-bugle": {
+            "name": "HM - Bugle",
+            "sound": "Tap In - Bugle.wav",
+            "duration": 4,
+            "wled_preset": 101
+        },
+        "hm-crow": {
+            "name": "HM - Crow",
+            "sound": "Tap In - Crow.wav",
+            "duration": 4,
+            "wled_preset": 102
+        },
+        "hm-doorbell": {
+            "name": "HM - Doorbell",
+            "sound": "Tap In - Doorbell.wav",
+            "duration": 13,
+            "wled_preset": 103
+        },
+        "hm-frees-laugh": {
+            "name": "HM - Frees Laugh",
+            "sound": "Tap In - Frees Laugh.wav",
+            "duration": 4,
+            "wled_preset": 104
+        },
+        "hm-frees-there-and-just": {
+            "name": "HM - Frees There You Are and Just In Time",
+            "sound": "Tap In - Frees There You Are and Just In Time.wav",
+            "duration": 5,
+            "wled_preset": 105
+        },
+        "hm-frees-there":{
+            "name": "HM - Frees There You Are",
+            "sound": "Tap In - Frees There You Are.wav",
+            "duration": 3,
+            "wled_preset": 106
+        },
+        "hm-leota-bell": {
+            "name": "HM - Leota Bell",
+            "sound": "Tap In - Leota Bell.wav",
+            "duration": 5,
+            "wled_preset": 107
+        },
+        "hm-leota-beyond": {
+            "name": "HM - Leota Beyond",
+            "sound": "Tap In - Leota Beyond.wav",
+            "duration": 5,
+            "wled_preset": 108
+        },
+        "hm-leota-spirits": {
+            "name": "HM - Leota Spirits",
+            "sound": "Tap In - Leota Spirits.wav",
+            "duration": 5,
+            "wled_preset": 109
+        },
+        "hm-music": {
+            "name": "HM - Music",
+            "sound": "Tap In - Music.wav",
+            "duration": 5,
+            "wled_preset": 110
+        },
+        "hm-seanc-horn": {
+            "name": "HM - Seance Horn",
+            "sound": "Tap In - Seance Horn.wav",
+            "duration": 3,
+            "wled_preset": 111
+        }
+}

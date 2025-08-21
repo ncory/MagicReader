@@ -83,6 +83,14 @@ body {
     background-image: url('/static/images/Tinkerbell-Shutdown-sm.jpg');
 }
 
+.modal-background-magicWand {
+    background-color: #fffbf2;
+}
+
+.modal-background-reboot {
+    background-color: #fffbf2;
+}
+
 .modal-background-shutdown {
     background-color: #1c1b1b;
 }
