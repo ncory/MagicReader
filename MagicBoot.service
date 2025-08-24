@@ -9,7 +9,7 @@ Type=oneshot
 RemainAfterExit=false
 User=pi
 #WorkingDirectory=/home/pi/magicreader
-ExecStart=/home/pi/magicreader/MagicWand.sh
+ExecStart=nohup /home/pi/magicreader/MagicBoot.sh &
 
 [Install]
-#WantedBy=multi-user.target
+WantedBy=multi-user.target

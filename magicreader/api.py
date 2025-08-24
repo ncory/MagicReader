@@ -4,6 +4,7 @@ from magicreader import MagicBand
 from sequenceManager import SequenceManager
 import platform
 import os
+import subprocess
 #import requests
 #from flask_restful import Api, Resource
 
@@ -108,12 +109,15 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
 
     @app.route('/control/shutdown')
     def control_shutdown():
-        os.system("sudo shutdown now")
+        os.system("nohup bash /home/pi/magicreader/soft-shutdown.sh &")
+        #os.system("sudo shutdown now")
         return {"result": "ok"}
 
     @app.route('/control/reboot')
     def control_reboot():
-        os.system("sudo reboot")
+        os.system("sudo systemctl start MagicReboot.service")
+        #os.system("nohup bash /home/pi/magicreader/soft-reboot.sh &")
+        #os.system("sudo reboot")
         return {"result": "ok"}
 
     @app.route('/control/magicWand')
