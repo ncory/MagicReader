@@ -14,6 +14,8 @@ class RfidReader:
         self.app = app
         self.port = port
         self.reader_thread = None
+        self.lastReadTime = datetime.datetime.now()
+        self.timeDelta = datetime.timedelta(seconds=3)
 
     def start(self) -> bool:
         # Create RFID thread and start it

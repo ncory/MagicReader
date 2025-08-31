@@ -2,6 +2,7 @@ import rfid
 from helpers import AppEvent, AppEventType, CancelReadException
 from mfrc522 import SimpleMFRC522
 import re
+import datetime
 
 class RfidMfrc522(rfid.RfidReader):
 
@@ -21,11 +22,18 @@ class RfidMfrc522(rfid.RfidReader):
                 id = self.reader.read_id()
                 if id is None:
                     continue
-                print(f"RFID:: Read RFID: {id}", flush=True)
-                # Pass to event queue
-                read = rfid.RfidRead(id, self.isDisneyBand(id))
-                event = AppEvent(AppEventType.ReadRfid, read)
-                self.app.event_queue.put((5, event))
+                # How long since last read?
+                now = datetime.datetime.now()
+                diff = now - self.lastReadTime
+                if (diff > self.timeDelta):
+                    # Enough time has passed, allow read
+                    print(f"RFID:: Read RFID: {id}", flush=True)
+                    # Pass to event queue
+                    read = rfid.RfidRead(id, self.isDisneyBand(id))
+                    event = AppEvent(AppEventType.ReadRfid, read)
+                    self.app.event_queue.put((5, event))
+                    # Update last read time
+                    self.lastReadTime = now
             except CancelReadException:
                 print("RFID:: Got CancelReadException!!", flush=True)
                 return
