@@ -1,5 +1,5 @@
 from enum import Enum
-from rest import RestHelpers
+from rest import RestQueue
 import time
 import socket
 import json
@@ -140,7 +140,8 @@ class SequenceAction:
             return False
         # Make REST call
         print(f"Performing URL action: {self.url} with method {self.method}", flush=True)
-        RestHelpers.makeRestCall(self.url, self.method, self.data)
+        RestQueue().makeRestCallAsync(self.url, self.method, self.data)
+        #RestHelpers.makeRestCall(self.url, self.method, self.data)
         return True
     
     def performBrightSignAction(self):

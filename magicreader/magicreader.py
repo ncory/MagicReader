@@ -1,32 +1,31 @@
 #!/usr/bin/env python
-import binascii
+#import binascii
 import logging
-import struct
+#import struct
 import time
 import json
-import os.path
+#import os.path
 from os import path
 import random 
 import sys
 import os
 from json import dumps
 #from httplib2 import Http
-from mfrc522 import SimpleMFRC522
+#from mfrc522 import SimpleMFRC522
 import RPi.GPIO as GPIO
-import signal
+#import signal
 import threading
 import queue
-import datetime
+#import datetime
 from functools import total_ordering
-from helpers import State, AppEvent, AppEventType, CancelReadException
+from helpers import State, AppEvent, AppEventType#, CancelReadException
 from bandManager import BandManager
 from sequenceManager import SequenceManager
 from soundManager import SoundManager
-from rfid import RfidRead, RfidReader
+from rfid import RfidRead#, RfidReader
 from rfid_mfrc522 import RfidMfrc522
 from rfid_weigand import RfidWeigand
 from sequence import Sequence
-from rest import RestHelpers
 from wled import WLEDManager
 
 print("Starting...", flush=True)
@@ -138,6 +137,8 @@ class MagicBand():
         self.allowRead = False
         # Stop RIFD reader
         self.reader.stop()
+        # Stop REST queue
+        self.rest_queue.shutdown()
         # Trigger blackout on LEDs
         self.wledManager.callLedPreset(settings['wled_preset_black'])
         # Stop all sound

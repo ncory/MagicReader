@@ -1,4 +1,4 @@
-from rest import RestHelpers
+from rest import RestQueue
 
 class WLEDManager:
     """Manager for WLED operations."""
@@ -15,4 +15,5 @@ class WLEDManager:
         url = f"http://{self.address}/win&PL={preset}"
         print(f"Calling LED preset: {url}", flush=True)
         # Make REST call
-        RestHelpers.makeRestCall(url, 'GET')
+        RestQueue().makeRestCallAsync(url, 'GET')
+        #RestHelpers.makeRestCall(url, 'GET')
