@@ -40,7 +40,7 @@ print("Finishing RFID read test script", flush=True)
 # Do cleanup
 try:
 	reader.READER.Close_MFRC522()
-	GPIO.cleanup()
+	#GPIO.cleanup()
 	pass
 except:
 	pass
