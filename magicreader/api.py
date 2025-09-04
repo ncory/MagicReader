@@ -5,6 +5,7 @@ from sequenceManager import SequenceManager
 import platform
 import os
 import subprocess
+import logging
 #import requests
 #from flask_restful import Api, Resource
 
@@ -12,6 +13,9 @@ import subprocess
 def RunMagicApi(magicreader: MagicBand, port=8000):
     # Create app
     app = Flask("MagicReaderApi")
+    # Supress logging all the damn requests
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.WARNING)
 
 
     ###### Pages ######
@@ -240,4 +244,4 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     
 
     # Run Flask app
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=False)
