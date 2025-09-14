@@ -27,6 +27,7 @@ from rfid_mfrc522 import RfidMfrc522
 from rfid_weigand import RfidWeigand
 from sequence import Sequence
 from wled import WLEDManager
+from rest import RestQueue
 
 print("Starting...", flush=True)
 
@@ -138,7 +139,7 @@ class MagicBand():
         # Stop RIFD reader
         self.reader.stop()
         # Stop REST queue
-        self.rest_queue.shutdown()
+        RestQueue().shutdown()
         # Trigger blackout on LEDs
         self.wledManager.callLedPreset(settings['wled_preset_black'])
         # Stop all sound
