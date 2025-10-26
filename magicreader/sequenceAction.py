@@ -22,10 +22,6 @@ class SequenceAction:
         self.address = None
         self.port = -1
         self.command = None
-        self.scene_id = -1
-        self.area = 0
-        self.loops = 1
-        self.status = True
     
     @classmethod
     @staticmethod
@@ -56,25 +52,13 @@ class SequenceAction:
         command = data.get('command', None)
         if command is not None and not isinstance(command, str):
             command = None
-        scene_id = data.get('scene_id', -1)
-        if not isinstance(scene_id, int) or scene_id < 0:
-            scene_id = -1
-        area = data.get('area', 0)
-        if not isinstance(area, int) or area < 0:
-            area = 0
-        loops = data.get('loops', 1)
-        if not isinstance(loops, int) or loops < 1:
-            loops = 1
-        status = data.get('status', True)
-        if not isinstance(status, bool):
-            status = True
         # Which type?
         if type == 'url':
             return SequenceAction.new_action_url(url, method, dataObj, delay)
         elif type == 'brightsign':
             return SequenceAction.new_action_brightsign(address, port, command, delay)
         elif type == 'chromateq':
-            return SequenceAction.new_action_chromateq(address, port, scene_id, area, loops, status, delay)
+            return SequenceAction.new_action_chromateq(address, port, command, delay)
         else:
             print(f"Unknown action type: {type}", flush=True)
             return None
@@ -101,14 +85,11 @@ class SequenceAction:
     
     @classmethod
     @staticmethod
-    def new_action_chromateq(address: str, port: int, scene_id: int, area: int = 0, loops: int = 1, status: bool = True, delay: int = 0):
+    def new_action_chromateq(address: str, port: int, command: str, delay: int = 0):
         action = SequenceAction(ActionType.ChromaTeq)
         action.address = address
         action.port = port
-        action.scene_id = scene_id
-        action.area = area
-        action.loops = loops
-        action.status = status
+        action.command = command
         action.delay = delay
         return action
     
@@ -154,7 +135,7 @@ class SequenceAction:
         if self.command is None or not isinstance(self.command, str):
             print("Invalid BrightSign command", flush=True)
             return False
-        # Perform the action (placeholder for actual implementation)
+        # Perform the action
         print(f"Performing BrightSign action: {self.command} to {self.address}:{self.port}", flush=True)
         try:
             # Encode command string to bytes
@@ -176,36 +157,22 @@ class SequenceAction:
         if self.address is None or not isinstance(self.address, str) or self.port < 0:
             print("Invalid ChromaTeq address or port", flush=True)
             return False
-        # Check for valid scene_id
-        if self.scene_id < 0:
-            print("Invalid ChromaTeq scene ID", flush=True)
+        # Check for valid command
+        if self.command is None or not isinstance(self.command, str):
+            print("Invalid ChromaTeq command", flush=True)
             return False
-        # Get area & status
-        area = 0
-        if self.area is not None and isinstance(self.area, int):
-            area = self.area
-        status = True
-        if self.status is not None and isinstance(self.status, bool):
-            status = self.status
-        # Send the scene command via UDP
-        print(f"Sending Chromateq scene command -  scene_id:{self.scene_id}, area: {area}, status: {status}  to {self.address}:{self.port}", flush=True)
+        # Perform the action
+        print(f"Performing ChromaTeq action: {self.command} to {self.address}:{self.port}", flush=True)
         try:
-            # Compose message as dict
-            message = {
-                "id": self.scene_id,
-                "a": area,
-                "s": status
-            }
-            # Encode as JSON
-            json_str = json.dumps(message)
-            # Encode JSN to bytes
-            data = json_str.encode("utf-8")
+            # Encode command string to bytes
+            data = self.command.encode("utf-8")
             #print(f"Message as bytes: {data}")
+            # Send bytes over UDP
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(data, (self.address, self.port))
         except Exception as e:
             print(f"Error sending ChromaTeq command: {e}", flush=True)
             return False
         # Done
-        print("Finished sending UDP")
+        print("Finished sending ChromaTeq command", flush=True)
         return True
