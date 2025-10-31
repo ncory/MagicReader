@@ -21,11 +21,13 @@ from functools import total_ordering
 from helpers import State, AppEvent, AppEventType#, CancelReadException
 from bandManager import BandManager
 from sequenceManager import SequenceManager
+from tapInPresetsManager import TapInPresetsManager
 from soundManager import SoundManager
 from rfid import RfidRead#, RfidReader
 from rfid_mfrc522 import RfidMfrc522
 from rfid_weigand import RfidWeigand
 from sequence import Sequence
+from tapInPreset import TapInPreset
 from wled import WLEDManager
 from rest import RestQueue
 
@@ -40,7 +42,7 @@ with open('data/settings.json', 'r') as file:
     data = json.load(file)
 config = data
 settings = config['settings']
-tap_in_presets = config['tapInPresets']
+#tap_in_presets = config['tapInPresets']
 print_band_id = bool(settings['print_band_id'])
 #bands = config['bands']
 #sequences = config['sequences']
@@ -60,6 +62,7 @@ class MagicBand():
         # Create managers
         self.band_manager = BandManager()
         self.sequence_manager = SequenceManager()
+        self.tapInPresetsManager = TapInPresetsManager()
         self.soundManager = SoundManager()
         self.wledManager = WLEDManager(settings['wled_address'])
         # Set flags and status
@@ -88,7 +91,7 @@ class MagicBand():
             self.reader = RfidMfrc522(self)
         else:
             self.reader = None
-        # Pre-load all sound files
+        # Pre-load sound files
         self.soundManager.preLoadSound("startup", settings['sound_startup'])
         self.soundManager.preLoadSound("waiting", settings['sound_waiting'])
         self.soundManager.preLoadSound("success", settings['sound_success'])
@@ -103,6 +106,10 @@ class MagicBand():
         # Load sequences from file
         if not self.sequence_manager.loadFromFile():
             print("ERROR: Failed to load sequences from file", flush=True)
+            return False
+        # Load sequences from file
+        if not self.tapInPresetsManager.loadFromFile():
+            print("ERROR: Failed to load tap-in presets from file", flush=True)
             return False
         # Set active flag
         self.is_active = True
@@ -283,7 +290,7 @@ class MagicBand():
                 self.allowRead = False
                 # Play preset
                 self.setState(State.PlayingTapIn)
-                self.playTapInPreset(event.data)
+                self.playTapInPreset(self.tapInPresetsManager.getPresetById(event.data))
                 # Return to waiting
                 self.event_queue.put((2, AppEvent(AppEventType.EnterWaitMode)))
             elif event.type == AppEventType.PlaySequence:
@@ -421,7 +428,7 @@ class MagicBand():
             print(f"Read MagicBand ID: {band_id}", flush=True)
         # Lookup sequence name for band id
         print("Looking up band id", flush=True)
-        seq_id = self.band_manager.lookupBandId(band_id, isDisney)
+        (seq_id, preset_id) = self.band_manager.lookupBandId(band_id, isDisney)
         # Get matching sequence
         print("Looking up sequence", flush=True)
         sequence = self.sequence_manager.getSequenceById(seq_id)
@@ -429,9 +436,14 @@ class MagicBand():
             print("ERROR: found no sequnce to run!", flush=True)
             self.onError("Found no sequence to run!")
             return
-        # Play a random tap-in preset
+        # Is there a specific tap-in preset to play for this band?
+        preset = self.tapInPresetsManager.getPresetById(preset_id)
+        if preset is None:
+            # Get random tap-in preset
+            preset = self.tapInPresetsManager.getRandomTapInPreset()
+        # Play tap-in preset
         self.setState(State.PlayingTapIn)
-        self.playTapInPreset(self.getRandomTapInPreset())
+        self.playTapInPreset(preset)
         '''
         # Trigger success lights and sound
         self.setState(State.TapSuccess)
@@ -558,32 +570,26 @@ class MagicBand():
 
     def getRandomTapInPreset(self):
         """Returns a random tap-in preset id from the list"""
-        if tap_in_presets is not None and isinstance(tap_in_presets, dict) and len(tap_in_presets) > 0:
-            return random.choice(list(tap_in_presets.keys()))
+        if self.tap_in_presets is not None and isinstance(self.tap_in_presets, dict) and len(self.tap_in_presets) > 0:
+            return random.choice(list(self.tap_in_presets.keys()))
         return None
 
-    def playTapInPreset(self, id: str):
-        # Find preset from list
-        if id in tap_in_presets:
-            preset = tap_in_presets.get(id)
-            if isinstance(preset, dict):
-                # Run tap-in preset
-                self.lastTapInPreset = id
-                # Call WLED
-                if 'wled_preset' in preset and isinstance(preset['wled_preset'], int):
-                    self.wledManager.callLedPreset(preset['wled_preset'])
-                # Play sound
-                if 'sound' in preset and isinstance(preset['sound'], str):
-                    self.soundManager.playSoundFile(preset['sound'])
-                # Delay for duration of sound
-                if 'duration' in preset and (isinstance(preset['duration'], int) or isinstance(preset['duration'], float)):
-                    duration = preset['duration']
-                    if duration > 0:
-                        print(f"Waiting {duration} seconds for sound to finish", flush=True)
-                        time.sleep(duration)
-                # Done!
-                return True
-        return False
+    def playTapInPreset(self, preset: TapInPreset):
+        if preset is None or not isinstance(preset, TapInPreset):
+            return False
+        # Run tap-in preset
+        self.lastTapInPreset = preset.id
+        # Call WLED
+        self.wledManager.callLedPreset(preset.wled_preset)
+        # Play sound
+        if isinstance(preset.sound, str):
+            self.soundManager.playSoundFile(preset.sound)
+        # Delay for duration of sound
+        if preset.duration > 0:
+            print(f"Waiting {preset.duration} seconds for sound to finish", flush=True)
+            time.sleep(preset.duration)
+        # Done!
+        return True
 
     ######### Sequence functions #########
 
@@ -785,19 +791,7 @@ class MagicBand():
     def api_stopSequence(self):
         # Push event
         self.event_queue.put((2, AppEvent(AppEventType.StopSequence)))
-    
-    def api_getTapInPresetsList(self):
-        # Create list of tap-in presets and names
-        list = []
-        # Iterate presets
-        for key, value in tap_in_presets.items():
-            if 'name' in value:
-                list.append({"id": key, "name": value.get('name')})
-            else:
-                list.append({"id": key})
-        # Return
-        return list
-    
+        
     def api_playPlayTapInPreset(self, id: str):
         # Push event
         self.event_queue.put((2, AppEvent(AppEventType.PlayTapInPreset, id)))

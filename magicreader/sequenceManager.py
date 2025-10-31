@@ -50,12 +50,12 @@ class SequenceManager:
 
     def getSequenceNamesList(self) -> list:
         # Create list to hold data
-        list = []
+        found = []
         # Iterate sequences
         for id, sequence in self.sequences.items():
-            list.append({"id": id, "name": sequence.name})
+            found.append({"id": id, "name": sequence.name})
         # Return list
-        return list
+        return found
 
     def getSequenceById(self, id: str):
         """Returns sequence by id or None if not found"""

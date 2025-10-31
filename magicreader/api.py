@@ -135,8 +135,8 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
 
     @app.route('/tapInPresets')
     def get_tapInPresets():
-        # Get list of sequences from app
-        presets = magicreader.api_getTapInPresetsList()
+        # Get list of tap-in presets from app
+        presets = magicreader.tapInPresetsManager.getTapInPresetNamesList()
         # Return data
         return {
             "result": "ok",
@@ -186,8 +186,13 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
                     seq_id = request_data.get('sequence')
                     if not isinstance(seq_id, str):
                         seq_id = None
+                tapInPresets = None
+                if 'tapInPresets' in request_data:
+                    tapInPresets = request_data.get('tapInPresets')
+                    if not isinstance(tapInPresets, list):
+                        tapInPresets = None
                 # Process with band manager
-                result = magicreader.band_manager.updateBand(band_id, name, seq_id)
+                result = magicreader.band_manager.updateBand(band_id, name, seq_id, tapInPresets)
                 if result:
                     # Done - now save to file
                     if not magicreader.band_manager.saveToFile():
