@@ -1,5 +1,6 @@
 import json
 from sequence import Sequence
+from dataclasses import asdict
 
 class SequenceManager:
 
@@ -54,6 +55,15 @@ class SequenceManager:
         # Iterate sequences
         for id, sequence in self.sequences.items():
             found.append({"id": id, "name": sequence.name})
+        # Return list
+        return found
+
+    def getSequencesList(self) -> list:
+        # Create list to hold data
+        found = []
+        # Iterate sequences
+        for id, sequence in self.sequences.items():
+            found.append(asdict(sequence))
         # Return list
         return found
 

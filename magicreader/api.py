@@ -146,10 +146,20 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
 
     ###### Sequences ######
 
+    @app.route('/sequenceNames')
+    def get_sequenceNames():
+        # Get list of sequences from app
+        sequences = magicreader.sequence_manager.getSequenceNamesList()
+        # Return data
+        return {
+            "result": "ok",
+            "data": sequences
+        }
+
     @app.route('/sequences')
     def get_sequences():
         # Get list of sequences from app
-        sequences = magicreader.sequence_manager.getSequenceNamesList()
+        sequences = magicreader.sequence_manager.getSequencesList()
         # Return data
         return {
             "result": "ok",

@@ -1,7 +1,7 @@
 {
         "epcot-anthem": {
             "name": "EPCOT Anthem",
-            "wled_action": null,
+            "wled_preset": null,
             "music": "EPCOT_Anthem.wav",
             "actions": [
                 {
@@ -11,25 +11,17 @@
                     "delay": 0
                 },
                 {
-                    "type": "brightsign",
-                    "address": "192.168.1.91",
-                    "port": 5000,
-                    "command": "ShowStop"
-                },
-                {
-                    "type": "brightsign",
-                    "address": "192.168.1.91",
-                    "port": 5000,
-                    "command": "Leota Show",
+                    "type": "url",
+                    "url": "http://ssexl.local/win&PL=53",
+                    "method": "GET",
                     "delay": 0
                 }
             ],
-            "wait_delay": 191,
-            "cancel_allowed": false
+            "wait_delay": 191
         },
         "epcot-40th": {
             "name": "EPCOT 40th Anniversary",
-            "wled_action": 26,
+            "wled_preset": 26,
             "music": "EPCOT_Anniversary.wav",
             "actions": [
                 {
@@ -39,16 +31,9 @@
                     "delay": 0
                 },
                 {
-                    "type": "brightsign",
-                    "address": "192.168.1.91",
-                    "port": 5000,
-                    "command": "ShowStop"
-                },
-                {
-                    "type": "brightsign",
-                    "address": "192.168.1.91",
-                    "port": 5000,
-                    "command": "Busts Show",
+                    "type": "url",
+                    "url": "http://ssexl.local/win&PL=6",
+                    "method": "GET",
                     "delay": 0
                 }
             ],
@@ -56,7 +41,7 @@
         },
         "HappilyEverAfter": {
             "name": "Happily Ever After",
-            "wled_action": null,
+            "wled_preset": null,
             "music": "HappilyEverAfter.mp3",
             "actions": [
                 {
@@ -64,35 +49,13 @@
                     "url": "http://spaceshipearth.local/win&PL=75",
                     "method": "GET",
                     "delay": 0
-                },
-                {
-                    "type": "chromateq",
-                    "address": null,
-                    "port": 8093,
-                    "scene_id": 1,
-                    "area": 0,
-                    "loops": 1,
-                    "status": true
-                },
-                {
-                    "type": "brightsign",
-                    "address": "192.168.1.91",
-                    "port": 5000,
-                    "command": "ShowStop"
-                },
-                {
-                    "type": "brightsign",
-                    "address": "192.168.1.91",
-                    "port": 5000,
-                    "command": "Start-Full",
-                    "delay": 0
                 }
             ],
             "wait_delay": 1363
         },
         "unknown-band": {
             "name": "Unknown Band",
-            "wled_action": null,
+            "wled_preset": null,
             "music": null,
             "actions": [
                 {

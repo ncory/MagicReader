@@ -1,6 +1,7 @@
 
 /////// Global Variables ///////
 var tapInPresets = null;
+var sequenceNames = null;
 var sequences = null;
 var bands = null;
 var statusCache = null;
@@ -74,6 +75,13 @@ function onLoadBandsPage() {
     // Update sequences in selects
     updateSequencesInSelect($('#newBandSequence'));
     updateSequencesInSelect($('#editBandSequence'));
+}
+
+function onLoadSequencesPage() {
+    // Show sequences table
+    displaySequencesTable()
+    // Refresh sequences
+    getFullSequenceList();
 }
 
 
@@ -323,17 +331,18 @@ function addTapInPresetButton(div, id, name) {
 }
 
 
-/////// Sequence Functions ///////
+/////// Sequence Button Functions ///////
 
 function getSequenceList() {
     // API Call
-    makeApiCall('/sequences', 'GET',
+    makeApiCall('/sequenceNames', 'GET',
         function(response, textStatus, jqXHR) {
             // Success
             // Cache sequences list
-            sequences = response.data;
+            sequenceNames = response.data;
             // Display sequence buttons
             displaySequences();
+            displayBands();
             // Update in selects
             updateSequencesInSelect($('#newBandSequence'));
             updateSequencesInSelect($('#editBandSequence'));
@@ -341,9 +350,10 @@ function getSequenceList() {
         function(jqXHR, textStatus, errorThrown) {
             // ERROR
             console.debug("ERROR loading sequences:" + errorThrown);
-            sequences = null;
+            sequenceNames = null;
             // Display sequence buttons
             displaySequences();
+            displayBands();
             // Update in selects
             updateSequencesInSelect($('#newBandSequence'));
             updateSequencesInSelect($('#editBandSequence'));
@@ -355,9 +365,9 @@ function displaySequences() {
     let sequencesDiv = $('#sequences');
     sequencesDiv.empty();
     // Do we have available sequences?
-    if (sequences != null && sequences instanceof Array) {
+    if (sequenceNames != null && sequenceNames instanceof Array) {
         /// Success
-        sequences.forEach((seq) => {
+        sequenceNames.forEach((seq) => {
             // Is this a valid object?
             if (seq instanceof Object) {
                 // Get ID
@@ -397,9 +407,9 @@ function updateSequencesInSelect(sequencesSelect) {
     // Add empty/none option
     sequencesSelect.append($('<option selected value="">None</option>'));
     // Do we have available sequences?
-    if (sequences != null && sequences instanceof Array) {
+    if (sequenceNames != null && sequenceNames instanceof Array) {
         /// Success
-        sequences.forEach((seq) => {
+        sequenceNames.forEach((seq) => {
             // Is this a valid object?
             if (seq instanceof Object) {
                 // Get ID
@@ -426,7 +436,7 @@ function addSequenceSelectOption(select, id, name) {
 }
 
 function getSequenceName(id) {
-    if (sequences != null && sequences instanceof Array) {
+    if (sequenceNames != null && sequenceNames instanceof Array) {
         var foundName = id;
         sequences.forEach((seq) => {
             if("id" in seq) {
@@ -437,6 +447,99 @@ function getSequenceName(id) {
         });
     }
     return foundName;
+}
+
+
+/////// Sequence Table Functions ///////
+
+function getFullSequenceList() {
+    // API Call
+    makeApiCall('/sequences', 'GET',
+        function(response, textStatus, jqXHR) {
+            // Success
+            // Cache sequences list
+            sequences = response.data;
+            // Display sequences table
+            displaySequencesTable();
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            // ERROR
+            console.debug("ERROR loading sequences:" + errorThrown);
+            sequences = null;
+            // Display sequences table
+            displaySequencesTable();
+        });
+}
+
+function displaySequencesTable() {
+    // Remove all existing sequences from table
+    let sequencesTableBody = $('#sequencesTable_body');
+    sequencesTableBody.empty();
+    // Do we have available sequences?
+    if (sequences != null && sequences instanceof Array) {
+        /// Success
+        sequences.forEach((seq) => {
+            // Is this a valid object?
+            if (seq instanceof Object) {
+                // Get ID
+                if("id" in seq) {
+                    let seq_id = seq.id;
+                    // Get name
+                    let seq_name = null;
+                    if("name" in seq) {
+                        seq_name = seq.name;
+                    }
+                    if(seq_name == null || !isString(seq_name)) {
+                        seq_name = "";
+                    }
+                    // Get cancel allowed
+                    let cancel_allowed = false;
+                    if ("cancel_allowed" in seq && isBool(seq.cancel_allowed)) {
+                        cancel_allowed = seq.cancel_allowed;
+                    }
+                    // Actions count
+                    let actions_count = 0;
+                    if ("actions" in seq && seq.actions instanceof Array) {
+                        actions_count = seq.actions.length;
+                    }
+                    // Add row
+                    addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed, actions_count);
+                }
+            }
+        });
+    } else {
+        /// ERROR - Do nothing
+    }
+}
+
+function addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed, actions_count) {
+    // Create row
+    let tr = $("<tr>");
+    // Add id
+    let td_id = $('<td>').text(seq_id);
+    tr.append(td_id);
+    // Add sequence name
+    let td_seq_name = $('<td>').text(seq_name);
+    tr.append(td_seq_name);
+    // Add cancel allowed
+    let td_cancel_allowed = $('<td>').text(cancel_allowed ? "Yes" : "No");
+    tr.append(td_cancel_allowed);
+    // Add actions count
+    let td_actions_count = $('<td>').text(actions_count);
+    tr.append(td_actions_count);
+    // Add buttons
+    let td_buttons = $('<td>');
+    let div_buttons = $('<div role="group">').addClass('btn-group');
+    td_buttons.append(div_buttons);
+    tr.append(td_buttons);
+    // Button - Edit
+    div_buttons.append($('<button type="button" class="btn btn-secondary" onclick="buttonBandEdit(this)">Edit</button>')
+        .attr("data-sequence", seq_id));
+    // Button - Delete
+    div_buttons.append($('<button type="button" class="btn btn-danger" onclick="buttonBandDelete(this)">Delete</button>')
+        .attr("data-sequence", seq_id));
+    // Add row to table
+    sequencesTableBody.append(tr);
 }
 
 
@@ -485,6 +588,7 @@ function displayBands() {
                     if ("sequence" in band) {
                         seq_name = getSequenceName(band.sequence);
                     }
+                    else seq_name = band.sequence;
                     if(seq_name == null || !isString(seq_name)) {
                         seq_name = "";
                     }

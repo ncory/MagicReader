@@ -3,15 +3,31 @@ from rest import RestQueue
 import time
 import socket
 import json
+from wled import WLEDManager
+from soundManager import SoundManager
+from dataclasses import dataclass
 
 
-class ActionType(Enum):
+class ActionType(str, Enum):
+    WLEDInternal = "wledInternal"
+    WLEDExternal = "wledExternal"
+    SoundFile = "soundFile"
     URL = "url"
     BrightSign = "brightsign"
     ChromaTeq = "chromateq"
+    MagicBandBroadcast = "magicBandBroadcast"
 
 
+@dataclass
 class SequenceAction:
+    type: ActionType
+    delay: int
+    url: str
+    method: str
+    data: any
+    address: str
+    port: int
+    command: str
 
     def __init__(self, type: ActionType):
         self.type = type
@@ -53,15 +69,57 @@ class SequenceAction:
         if command is not None and not isinstance(command, str):
             command = None
         # Which type?
-        if type == 'url':
+        if type == 'wledInternal':
+            if not isinstance(dataObj, int):
+                dataObj = 0
+            return SequenceAction.new_action_wled_internal(dataObj, delay)
+        elif type == 'wledExternal':
+            if not isinstance(dataObj, int):
+                dataObj = 0
+            return SequenceAction.new_action_wled_external(address, dataObj, delay)
+        elif type == 'soundFile':
+            if not isinstance(dataObj, str):
+                print("Invalid sound file name provided", flush=True)
+                dataObj = None
+            return SequenceAction.new_action_sound_file(dataObj, delay)
+        elif type == 'url':
             return SequenceAction.new_action_url(url, method, dataObj, delay)
         elif type == 'brightsign':
             return SequenceAction.new_action_brightsign(address, port, command, delay)
         elif type == 'chromateq':
             return SequenceAction.new_action_chromateq(address, port, command, delay)
+        elif type == 'magicBandBroadcast':
+            if not isinstance(dataObj, str):
+                dataObj = None
+            return SequenceAction.new_action_magicband_broadcast(address, dataObj, delay)
         else:
             print(f"Unknown action type: {type}", flush=True)
             return None
+    
+    @classmethod
+    @staticmethod
+    def new_action_wled_internal(preset: int = 0, delay: int = 0):
+        action = SequenceAction(ActionType.WLEDInternal)
+        action.data = preset
+        action.delay = delay
+        return action
+    
+    @classmethod
+    @staticmethod
+    def new_action_wled_external(address: str = None, preset: int = 0, delay: int = 0):
+        action = SequenceAction(ActionType.WLEDExternal)
+        action.address = address
+        action.data = preset
+        action.delay = delay
+        return action
+    
+    @classmethod
+    @staticmethod
+    def new_action_sound_file(filename: str, delay: int = 0):
+        action = SequenceAction(ActionType.SoundFile)
+        action.data = filename
+        action.delay = delay
+        return action
     
     @classmethod
     @staticmethod
@@ -93,12 +151,27 @@ class SequenceAction:
         action.delay = delay
         return action
     
-    def performAction(self):
+    @classmethod
+    @staticmethod
+    def new_action_magicband_broadcast(address:str, data: str, delay: int = 0):
+        action = SequenceAction(ActionType.MagicBandBroadcast)
+        action.address = address
+        action.data = data
+        action.delay = delay
+        return action
+
+    def performAction(self, wled: WLEDManager, soundManager: SoundManager):
         """Performs the action based on its type."""
         # Check for delay
         if self.delay > 0:
             time.sleep(self.delay)
         # Which action type?
+        if self.type == ActionType.WLEDInternal:
+            return self.performWLEDInternalAction(wled)
+        elif self.type == ActionType.WLEDExternal:
+            return self.performWLEDAction()
+        elif self.type == ActionType.SoundFile:
+            return self.performSoundFileAction(soundManager)
         if self.type == ActionType.URL:
             return self.performUrlAction()
         elif self.type == ActionType.BrightSign:
@@ -109,6 +182,46 @@ class SequenceAction:
             print(f"Unknown action type: {self.type}", flush=True)
             return False
     
+    def performWLEDInternalAction(self, wled: WLEDManager):
+        # Cache internal WLED address
+        self.address = wled.address
+        pass
+
+    def performWLEDAction(self):
+        """Performs a WLED action."""
+        # Check for existing URL
+        if self.url is None or not isinstance(self.url, str):
+            # Check for valid preset
+            if not isinstance(self.data, int):
+                print("Invalid WLED preset provided", flush=True)
+                return False
+            # Check for valid address
+            if self.address is None or not isinstance(self.address, str):
+                print("Invalid WLED address provided", flush=True)
+                return False
+            # Create WLED URL
+            self.url = f"http://{self.address}/win&PL={self.data}"
+        # Set GET method
+        self.method = "GET"
+        # Make REST call
+        self.performUrlAction()
+        return True
+    
+    def performSoundFileAction(self, soundManager: SoundManager):
+        """Performs a sound file action."""
+        # Check for valid sound manager
+        if soundManager is None or not isinstance(soundManager, SoundManager):
+            print("Invalid SoundManager provided", flush=True)
+            return False
+        # Check for valid filename
+        if self.data is None or not isinstance(self.data, str):
+            print("Invalid sound file name provided", flush=True)
+            return False
+        # Play the sound file
+        print(f"Playing sound file: {self.data}", flush=True)
+        soundManager.playMusic(self.data)
+        return True
+
     def performUrlAction(self):
         """Performs a URL action."""
         # Check for valid URL
@@ -175,4 +288,27 @@ class SequenceAction:
             return False
         # Done
         print("Finished sending ChromaTeq command", flush=True)
+        return True
+    
+    def performMagicBandBroadcastAction(self):
+        """Performs a Magic Band Broadcast action."""
+        # Check for valid address and data
+        if self.address is None or not isinstance(self.address, str):
+            print("Invalid Magic Band broadcast address", flush=True)
+            return False
+        if self.data is None or not isinstance(self.data, str):
+            print("Invalid Magic Band broadcast data", flush=True)
+            return False
+        # Perform the action
+        print(f"Performing Magic Band Broadcast action: {self.data} to {self.address}", flush=True)
+        try:
+            # Construct URL
+            url = f"http://{self.address}/command"
+            # Make REST call
+            RestQueue().makeRestCallAsync(url, "POST", self.data)
+        except Exception as e:
+            print(f"Error sending Magic Band broadcast: {e}", flush=True)
+            return False
+        # Done
+        print("Finished sending Magic Band broadcast", flush=True)
         return True

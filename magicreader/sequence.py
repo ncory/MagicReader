@@ -1,8 +1,14 @@
 from sequenceAction import SequenceAction
 from wled import WLEDManager
 from soundManager import SoundManager
+from dataclasses import dataclass
 
+@dataclass
 class Sequence:
+    id: str
+    name: str
+    cancel_allowed: bool = True
+    actions: list = None
 
     def __init__(self, id: str, name: str):
         self.id = id
@@ -92,7 +98,7 @@ class Sequence:
         # Perform all actions
         for action in self.actions:
             if isinstance(action, SequenceAction):
-                action.performAction()
+                action.performAction(wled, soundManager)
             else:
                 print("ERROR: Action must be a SequenceAction object", flush=True)
         # Done

@@ -5,6 +5,12 @@
             "duration": 2,
             "wled_preset": 100
         },
+        "passholder": {
+            "name": "Annual Passholder",
+            "sound": "Tap In - Passholder.wav",
+            "duration": 2,
+            "wled_preset": 79
+        },
         "hm-bugle": {
             "name": "HM - Bugle",
             "sound": "Tap In - Bugle.wav",

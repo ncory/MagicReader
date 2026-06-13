@@ -2,7 +2,7 @@
     "settings": {
         "rfid_mode": "mfrc522",
         "print_band_id": true,
-        "wled_address": "hm2-wled.local",
+        "wled_address": "hm4-wled.local",
         "wled_preset_black": 15,
         "wled_preset_startup": 16,
         "wled_preset_waiting": 8,
