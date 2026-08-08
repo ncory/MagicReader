@@ -5,6 +5,7 @@ var sequenceNames = null;
 var sequences = null;
 var bands = null;
 var statusCache = null;
+var editSequenceOriginalId = null;
 
 
 /*
@@ -16,9 +17,10 @@ function isString(val) {
     return false;
 }
 */
-const isString = v => v !== undefined && v !== null & (typeof v === 'string' || v instanceof String)
-const isDict = v => v !== undefined && v !== null & (typeof v === 'object' || v instanceof Object)
-const isBool = v => v !== undefined && v !== null & (typeof v === 'boolean' || v instanceof Boolean)
+const isString = v => v !== undefined && v !== null && (typeof v === 'string' || v instanceof String)
+const isDict = v => v !== undefined && v !== null && !Array.isArray(v) && (typeof v === 'object' || v instanceof Object)
+const isBool = v => v !== undefined && v !== null && (typeof v === 'boolean' || v instanceof Boolean)
+const isNumber = v => v !== undefined && v !== null && typeof v === 'number' && Number.isFinite(v)
 
 function getDataFromSuccessfulApiResponse(response, success="ok") {
     if ('result' in response) {
@@ -88,7 +90,7 @@ function onLoadSequencesPage() {
 /////// API Functions ///////
 
 function makeApiCall(endpoint, method='GET', callback_success=null, callback_error=null, data=null) {
-    url = endpoint
+    let url = endpoint
     $.ajax({
         url: url,
         method: method,
@@ -238,12 +240,16 @@ function displayStatus() {
         // Read allowed?
         if (statusCache.allowRead) {
             allowReadDiv.text("RFID Read Allowed");
-            allowReadButton.text("Disable RFID Read")
-            allowReadButton.on('click', controlDisableRead)
+            if (allowReadButton.length) {
+                allowReadButton.text("Disable RFID Read")
+                allowReadButton.on('click', controlDisableRead)
+            }
         } else {
             allowReadDiv.text("Ignoring RFID");
-            allowReadButton.text("Enable RFID Read")
-            allowReadButton.on('click', controlAllowRead)
+            if (allowReadButton.length) {
+                allowReadButton.text("Enable RFID Read")
+                allowReadButton.on('click', controlAllowRead)
+            }
         }
 } else {
         /// ERROR
@@ -436,9 +442,9 @@ function addSequenceSelectOption(select, id, name) {
 }
 
 function getSequenceName(id) {
+    let foundName = id;
     if (sequenceNames != null && sequenceNames instanceof Array) {
-        var foundName = id;
-        sequences.forEach((seq) => {
+        sequenceNames.forEach((seq) => {
             if("id" in seq) {
                 if (id == seq.id && "name" in seq) {
                     foundName = seq.name;
@@ -474,10 +480,12 @@ function getFullSequenceList() {
 function displaySequencesTable() {
     // Remove all existing sequences from table
     let sequencesTableBody = $('#sequencesTable_body');
+    let sequencesCount = $('#sequencesTable-count');
     sequencesTableBody.empty();
     // Do we have available sequences?
     if (sequences != null && sequences instanceof Array) {
         /// Success
+        sequencesCount.text(sequences.length + " total");
         sequences.forEach((seq) => {
             // Is this a valid object?
             if (seq instanceof Object) {
@@ -492,27 +500,22 @@ function displaySequencesTable() {
                     if(seq_name == null || !isString(seq_name)) {
                         seq_name = "";
                     }
-                    // Get cancel allowed
-                    let cancel_allowed = false;
-                    if ("cancel_allowed" in seq && isBool(seq.cancel_allowed)) {
-                        cancel_allowed = seq.cancel_allowed;
-                    }
-                    // Actions count
-                    let actions_count = 0;
-                    if ("actions" in seq && seq.actions instanceof Array) {
-                        actions_count = seq.actions.length;
-                    }
+                    let wledPreset = getNumberFromDict(seq, 'wled_preset');
+                    let music = getStringFromDict(seq, 'music') || "";
+                    let cancel_allowed = getBoolFromDict(seq, 'cancel_allowed');
+                    let actions_count = getActionsCount(seq);
                     // Add row
-                    addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed, actions_count);
+                    addSequenceToTable(sequencesTableBody, seq_id, seq_name, wledPreset, music, cancel_allowed, actions_count);
                 }
             }
         });
     } else {
-        /// ERROR - Do nothing
+        sequencesCount.text("");
+        sequencesTableBody.append($('<tr>').append($('<td colspan="7" class="text-secondary">').text("No sequences loaded.")));
     }
 }
 
-function addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed, actions_count) {
+function addSequenceToTable(sequencesTableBody, seq_id, seq_name, wledPreset, music, cancel_allowed, actions_count) {
     // Create row
     let tr = $("<tr>");
     // Add id
@@ -521,6 +524,12 @@ function addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed
     // Add sequence name
     let td_seq_name = $('<td>').text(seq_name);
     tr.append(td_seq_name);
+    // Add WLED preset
+    let td_wled = $('<td>').text(wledPreset == null ? "" : wledPreset);
+    tr.append(td_wled);
+    // Add music
+    let td_music = $('<td>').text(music);
+    tr.append(td_music);
     // Add cancel allowed
     let td_cancel_allowed = $('<td>').text(cancel_allowed ? "Yes" : "No");
     tr.append(td_cancel_allowed);
@@ -533,13 +542,352 @@ function addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed
     td_buttons.append(div_buttons);
     tr.append(td_buttons);
     // Button - Edit
-    div_buttons.append($('<button type="button" class="btn btn-secondary" onclick="buttonBandEdit(this)">Edit</button>')
+    div_buttons.append($('<button type="button" class="btn btn-secondary" onclick="buttonSequenceEdit(this)">Edit</button>')
         .attr("data-sequence", seq_id));
     // Button - Delete
-    div_buttons.append($('<button type="button" class="btn btn-danger" onclick="buttonBandDelete(this)">Delete</button>')
+    div_buttons.append($('<button type="button" class="btn btn-danger" onclick="buttonSequenceDelete(this)">Delete</button>')
         .attr("data-sequence", seq_id));
     // Add row to table
     sequencesTableBody.append(tr);
+}
+
+function getNumberFromDict(dict, key) {
+    if (dict.hasOwnProperty(key)) {
+        let val = dict[key];
+        return isNumber(val) ? val : null;
+    }
+    return null;
+}
+
+function getIntegerFromInput(selector, defaultValue = 0) {
+    let raw = $(selector).val();
+    if (raw === null || raw === '') return defaultValue;
+    let parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
+function getActionsCount(sequence) {
+    if (sequence instanceof Object && "actions" in sequence && sequence.actions instanceof Array) {
+        return sequence.actions.length;
+    }
+    return 0;
+}
+
+function getSequenceFromCache(seq_id) {
+    if (sequences != null && sequences instanceof Array) {
+        for (let i = 0; i < sequences.length; i++) {
+            let seq = sequences[i];
+            if (seq instanceof Object && 'id' in seq && seq.id === seq_id) {
+                return seq;
+            }
+        }
+    }
+    return null;
+}
+
+function buttonAddNewSequence() {
+    editSequenceOriginalId = null;
+    clearEditSequenceModal();
+    $('#editSequenceModalTitle').text("Add Sequence");
+    $('#editSequenceModal').modal('show');
+}
+
+function buttonSequenceEdit(element) {
+    let seq_id = element.dataset.sequence;
+    let seq = getSequenceFromCache(seq_id);
+    if (seq == null) return;
+    editSequenceOriginalId = seq_id;
+    clearEditSequenceModal();
+    $('#editSequenceModalTitle').text("Edit Sequence");
+    $('#editSequenceSequenceId').val(seq_id);
+    $('#editSequenceName').val(getStringFromDict(seq, 'name') || "");
+    $('#editSequenceWLED').val(getNumberFromDict(seq, 'wled_preset'));
+    $('#editSequenceMusic').val(getStringFromDict(seq, 'music') || "");
+    $('#editSequenceWaitDelay').val(getNumberFromDict(seq, 'wait_delay'));
+    $('#editSequenceCancelAllowed').prop('checked', getBoolFromDict(seq, 'cancel_allowed'));
+    displaySequenceActions(seq);
+    $('#editSequenceModal').modal('show');
+}
+
+function buttonSequenceDelete(element) {
+    let seq_id = element.dataset.sequence;
+    if (!confirm("Are you sure you want to delete sequence " + seq_id + "?")) {
+        return;
+    }
+    makeApiCall('/sequence/' + encodeURIComponent(seq_id), 'DELETE',
+        function(response, textStatus, jqXHR) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
+                sequences = data;
+                displaySequencesTable();
+                getSequenceList();
+            } else {
+                alert("Failed to delete sequence. Server returned empty result.");
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR deleting sequence:" + errorThrown);
+            alert("Failed to delete sequence. Error contacting server.");
+        });
+}
+
+function buttonEditSequenceSave() {
+    let seqId = $('#editSequenceSequenceId').val();
+    if (!isString(seqId) || seqId.trim().length < 1) {
+        alert("Please enter a valid Sequence ID.");
+        return;
+    }
+    seqId = seqId.trim();
+    let payload = buildSequencePayload(seqId);
+    let endpointId = editSequenceOriginalId || seqId;
+    makeApiCall('/sequence/' + encodeURIComponent(endpointId), 'PUT',
+        function(response, textStatus, jqXHR) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
+                sequences = data;
+                displaySequencesTable();
+                getSequenceList();
+                $('#editSequenceModal').modal('hide');
+            } else {
+                alert("Failed to save sequence. Server returned empty result.");
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR saving sequence:" + errorThrown);
+            alert("Failed to save sequence. Error contacting server.");
+        },
+        payload);
+}
+
+function buildSequencePayload(seqId) {
+    let wledPreset = getIntegerFromInput('#editSequenceWLED', -1);
+    let waitDelay = getIntegerFromInput('#editSequenceWaitDelay', 0);
+    return {
+        id: seqId,
+        name: $('#editSequenceName').val(),
+        wled_preset: wledPreset >= 0 ? wledPreset : null,
+        music: $('#editSequenceMusic').val() || null,
+        wait_delay: waitDelay >= 0 ? waitDelay : 0,
+        cancel_allowed: $('#editSequenceCancelAllowed').is(':checked'),
+        actions: collectSequenceActions()
+    };
+}
+
+function clearEditSequenceModal() {
+    $('#editSequenceSequenceId').val('');
+    $('#editSequenceName').val('');
+    $('#editSequenceWLED').val('');
+    $('#editSequenceMusic').val('');
+    $('#editSequenceWaitDelay').val('');
+    $('#editSequenceCancelAllowed').prop('checked', true);
+    $('#editSequenceActionsSummary').text("0 actions");
+    $('#editSequenceActionsTable_body').empty();
+}
+
+function displaySequenceActions(seq) {
+    let tableBody = $('#editSequenceActionsTable_body');
+    tableBody.empty();
+    let actions = seq.actions instanceof Array ? seq.actions : [];
+    $('#editSequenceActionsSummary').text(actions.length + (actions.length === 1 ? " action" : " actions"));
+    actions.forEach((action) => {
+        addSequenceActionRow(action);
+    });
+}
+
+function buttonAddSequenceAction() {
+    addSequenceActionRow({
+        type: "url",
+        method: "GET",
+        delay: 0
+    });
+}
+
+function addSequenceActionRow(action) {
+    if (!isDict(action)) action = {};
+    let type = getStringFromDict(action, 'type') || "url";
+    let tr = $('<tr class="sequence-action-row">');
+    tr.append($('<td class="sequence-action-type-cell">').append(createActionTypeSelect(type)));
+    tr.append($('<td>').append($('<input type="number" min="0" class="form-control form-control-sm action-delay">').val(getNumberFromDict(action, 'delay') || 0)));
+    tr.append($('<td>').append($('<input type="text" class="form-control form-control-sm action-target">').val(getActionTarget(action))));
+    tr.append($('<td>').append(createActionValueControl(action)));
+    tr.append($('<td>').append($('<input type="number" min="0" class="form-control form-control-sm action-port">').val(getNumberFromDict(action, 'port'))));
+    tr.append($('<td>').append(createActionRowButtons()));
+    $('#editSequenceActionsTable_body').append(tr);
+    updateActionRowForType(tr);
+    updateSequenceActionsSummary();
+}
+
+function createActionTypeSelect(type) {
+    let select = $('<select class="form-select form-select-sm action-type" onchange="actionTypeChanged(this);">');
+    [
+        ["url", "URL"],
+        ["wledInternal", "WLED Internal"],
+        ["wledExternal", "WLED External"],
+        ["soundFile", "Sound File"],
+        ["brightsign", "BrightSign"],
+        ["chromateq", "ChromaTeq"],
+        ["magicBandBroadcast", "MagicBand Broadcast"]
+    ].forEach((option) => {
+        select.append($('<option>').attr("value", option[0]).text(option[1]));
+    });
+    select.val(type);
+    return select;
+}
+
+function createActionValueControl(action) {
+    let wrapper = $('<div class="input-group input-group-sm action-value-group">');
+    wrapper.append($('<select class="form-select action-method">')
+        .append($('<option value="GET">GET</option>'))
+        .append($('<option value="POST">POST</option>'))
+        .append($('<option value="PUT">PUT</option>'))
+        .append($('<option value="DELETE">DELETE</option>'))
+        .val(getStringFromDict(action, 'method') || "GET"));
+    wrapper.append($('<input type="text" class="form-control action-value">').val(getActionValue(action)));
+    return wrapper;
+}
+
+function createActionRowButtons() {
+    let buttons = $('<div class="btn-group btn-group-sm" role="group">');
+    buttons.append($('<button type="button" class="btn btn-outline-secondary" title="Move up" onclick="buttonMoveSequenceActionUp(this)">Up</button>'));
+    buttons.append($('<button type="button" class="btn btn-outline-secondary" title="Move down" onclick="buttonMoveSequenceActionDown(this)">Down</button>'));
+    buttons.append($('<button type="button" class="btn btn-outline-danger" title="Delete" onclick="buttonDeleteSequenceAction(this)">Delete</button>'));
+    return buttons;
+}
+
+function getActionTarget(action) {
+    let type = getStringFromDict(action, 'type') || "url";
+    if (type === "url") return getStringFromDict(action, 'url') || "";
+    return getStringFromDict(action, 'address') || "";
+}
+
+function getActionValue(action) {
+    let type = getStringFromDict(action, 'type') || "url";
+    if (type === "url") return stringifyActionData(action.data);
+    if (type === "wledInternal" || type === "wledExternal") return action.data == null ? "" : action.data;
+    if (type === "soundFile") return action.data || "";
+    if (type === "magicBandBroadcast") return action.data || "";
+    return getStringFromDict(action, 'command') || "";
+}
+
+function stringifyActionData(value) {
+    if (value === undefined || value === null) return "";
+    if (isString(value)) return value;
+    return JSON.stringify(value);
+}
+
+function actionTypeChanged(element) {
+    updateActionRowForType($(element).closest('tr'));
+}
+
+function updateActionRowForType(row) {
+    let type = row.find('.action-type').val();
+    let target = row.find('.action-target');
+    let method = row.find('.action-method');
+    let value = row.find('.action-value');
+    let port = row.find('.action-port');
+    target.prop('disabled', false).attr('placeholder', 'Target');
+    method.toggleClass('d-none', type !== "url");
+    value.attr('placeholder', 'Value');
+    port.prop('disabled', false);
+
+    if (type === "url") {
+        target.attr('placeholder', 'URL');
+        port.prop('disabled', true).val('');
+    } else if (type === "wledInternal") {
+        target.prop('disabled', true).val('').attr('placeholder', 'Internal WLED');
+        value.attr('placeholder', 'Preset');
+        port.prop('disabled', true).val('');
+    } else if (type === "wledExternal") {
+        target.attr('placeholder', 'WLED address');
+        value.attr('placeholder', 'Preset');
+        port.prop('disabled', true).val('');
+    } else if (type === "soundFile") {
+        target.prop('disabled', true).val('').attr('placeholder', 'Sound Manager');
+        value.attr('placeholder', 'Filename');
+        port.prop('disabled', true).val('');
+    } else if (type === "magicBandBroadcast") {
+        target.attr('placeholder', 'Address');
+        value.attr('placeholder', 'Data');
+        port.prop('disabled', true).val('');
+    } else {
+        target.attr('placeholder', 'Address');
+        value.attr('placeholder', 'Command');
+        port.attr('placeholder', 'Port');
+    }
+}
+
+function collectSequenceActions() {
+    let actions = [];
+    $('#editSequenceActionsTable_body tr.sequence-action-row').each(function() {
+        let action = buildActionFromRow($(this));
+        if (action != null) actions.push(action);
+    });
+    return actions;
+}
+
+function buildActionFromRow(row) {
+    let type = row.find('.action-type').val();
+    let delay = parseInt(row.find('.action-delay').val(), 10);
+    if (!Number.isFinite(delay) || delay < 0) delay = 0;
+    let target = row.find('.action-target').val();
+    let value = row.find('.action-value').val();
+    let port = parseInt(row.find('.action-port').val(), 10);
+    let action = {
+        type: type,
+        delay: delay
+    };
+
+    if (type === "url") {
+        action.url = target;
+        action.method = row.find('.action-method').val() || "GET";
+        action.data = parseActionData(value);
+    } else if (type === "wledInternal") {
+        action.data = parseInt(value, 10);
+        if (!Number.isFinite(action.data)) action.data = 0;
+    } else if (type === "wledExternal") {
+        action.address = target;
+        action.data = parseInt(value, 10);
+        if (!Number.isFinite(action.data)) action.data = 0;
+    } else if (type === "soundFile") {
+        action.data = value;
+    } else if (type === "magicBandBroadcast") {
+        action.address = target;
+        action.data = value;
+    } else {
+        action.address = target;
+        action.command = value;
+        action.port = Number.isFinite(port) && port >= 0 ? port : -1;
+    }
+    return action;
+}
+
+function parseActionData(value) {
+    if (value === null || value === undefined || value === '') return null;
+    try {
+        return JSON.parse(value);
+    } catch (e) {
+        return value;
+    }
+}
+
+function buttonMoveSequenceActionUp(element) {
+    let row = $(element).closest('tr');
+    row.prev('.sequence-action-row').before(row);
+}
+
+function buttonMoveSequenceActionDown(element) {
+    let row = $(element).closest('tr');
+    row.next('.sequence-action-row').after(row);
+}
+
+function buttonDeleteSequenceAction(element) {
+    $(element).closest('tr').remove();
+    updateSequenceActionsSummary();
+}
+
+function updateSequenceActionsSummary() {
+    let count = $('#editSequenceActionsTable_body tr.sequence-action-row').length;
+    $('#editSequenceActionsSummary').text(count + (count === 1 ? " action" : " actions"));
 }
 
 
@@ -639,7 +987,7 @@ function buttonReadNewBand() {
     makeApiCall('/bands/read', 'PUT',
         function(response, textStatus, jqXHR) {
             // Success
-            data = getDataFromSuccessfulApiResponse(response);
+            let data = getDataFromSuccessfulApiResponse(response);
             // Did we get a returned ID?
             if (!isDict(data)) {
                 // Nope
@@ -709,8 +1057,8 @@ function buttonAddNewBandSave() {
     makeApiCall('/band/' + bandId, 'PUT',
         function(response, textStatus, jqXHR) {
             // Success
-            data = getDataFromSuccessfulApiResponse(response);
-            if (data != null && isDict(data)) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
                 // Success - Add to table
                 getKnownBandsList();
                 buttonAddNewBandCancel();
@@ -775,8 +1123,8 @@ function buttonEditBandSave() {
     makeApiCall('/band/' + bandId, 'PUT',
         function(response, textStatus, jqXHR) {
             // Success
-            data = getDataFromSuccessfulApiResponse(response);
-            if (data != null && isDict(data)) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
                 // Success - Add to table
                 getKnownBandsList();
                 // Hide modal
@@ -805,8 +1153,8 @@ function buttonBandDelete(element) {
     makeApiCall('/band/' + band_id, 'DELETE',
         function(response, textStatus, jqXHR) {
             // Success
-            data = getDataFromSuccessfulApiResponse(response);
-            if (data != null && isDict(data)) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
                 // Success - Remove from table
                 getKnownBandsList();
             } else {
@@ -827,7 +1175,7 @@ function showControlModalMagicWand() {
     $('#controlModalContent')
         .removeClass('modal-background-reboot')
         .removeClass('modal-background-shutdown')
-        .addClass('modal-background-reboot');
+        .addClass('modal-background-magicWand');
     showControlModal('magicWand');
 }
 
@@ -855,7 +1203,7 @@ function showControlModal(name) {
         function(response, status, xhr) {
             if (status === "error") {
                 console.debug("ERROR loading modal content: " + xhr.status + " " + xhr.statusText);
-                modalBody.text("Error loading modal content.");
+                modalContent.text("Error loading modal content.");
             }
         }); 
     // Show modal
@@ -882,4 +1230,3 @@ function confirmControlModalShutdown() {
     // Hide modal
     $('#controlModal').modal('hide');
 }
-
