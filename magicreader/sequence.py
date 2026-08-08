@@ -63,6 +63,21 @@ class Sequence:
             self.actions.append(action)
         else:
             print("ERROR: Action must be a SequenceAction object", flush=True)
+
+    def toDict(self) -> dict:
+        return {
+            "name": self.name,
+            "wled_preset": self.wled_preset,
+            "music": self.music,
+            "actions": [action.toDict() for action in self.actions if isinstance(action, SequenceAction)],
+            "wait_delay": self.wait_delay,
+            "cancel_allowed": self.cancel_allowed
+        }
+
+    def toApiDict(self) -> dict:
+        data = self.toDict()
+        data["id"] = self.id
+        return data
     
     def setActions(self, actions: list):
         # Clear existing actions list

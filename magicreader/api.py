@@ -2,6 +2,7 @@
 from flask import Flask, jsonify, request, render_template
 from magicreader import MagicBand
 from sequenceManager import SequenceManager
+from sequence import Sequence
 import platform
 import os
 import subprocess
@@ -165,6 +166,40 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
             "result": "ok",
             "data": sequences
         }
+
+    @app.route('/sequence/<seq_id>', methods=['PUT'])
+    def put_sequence(seq_id):
+        try:
+            request_data = request.get_json()
+            if request_data is not None and isinstance(request_data, dict):
+                new_seq_id = seq_id
+                if 'id' in request_data and isinstance(request_data.get('id'), str) and request_data.get('id') != '':
+                    new_seq_id = request_data.get('id')
+                sequence = Sequence.createFromDict(request_data, new_seq_id)
+                if sequence is not None:
+                    old_sequence = magicreader.sequence_manager.getSequenceById(seq_id)
+                    if old_sequence is not None and seq_id != new_seq_id:
+                        magicreader.sequence_manager.deleteSequence(seq_id)
+                    if magicreader.sequence_manager.updateSequence(sequence):
+                        if not magicreader.sequence_manager.saveToFile():
+                            result = get_sequences()
+                            result['result'] = "error"
+                            return result
+                        return get_sequences()
+        except Exception as e:
+            print(f"ERROR saving sequence: {e}", flush=True)
+        return {"result": "error"}
+
+    @app.route('/sequence/<seq_id>', methods=['DELETE'])
+    def delete_sequence(seq_id):
+        result = magicreader.sequence_manager.deleteSequence(seq_id)
+        if result:
+            if not magicreader.sequence_manager.saveToFile():
+                result = get_sequences()
+                result['result'] = "error"
+                return result
+            return get_sequences()
+        return {"result": "error"}
     
 
     ###### Bands ######

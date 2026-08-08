@@ -38,6 +38,25 @@ class SequenceAction:
         self.address = None
         self.port = -1
         self.command = None
+
+    def toDict(self) -> dict:
+        data = {
+            "type": self.type.value if isinstance(self.type, ActionType) else self.type,
+            "delay": self.delay
+        }
+        if self.url is not None:
+            data["url"] = self.url
+        if self.method is not None:
+            data["method"] = self.method
+        if self.data is not None:
+            data["data"] = self.data
+        if self.address is not None:
+            data["address"] = self.address
+        if self.port is not None and self.port >= 0:
+            data["port"] = self.port
+        if self.command is not None:
+            data["command"] = self.command
+        return data
     
     @classmethod
     @staticmethod
@@ -178,6 +197,8 @@ class SequenceAction:
             return self.performBrightSignAction()
         elif self.type == ActionType.ChromaTeq:
             return self.performChromaTeqAction()
+        elif self.type == ActionType.MagicBandBroadcast:
+            return self.performMagicBandBroadcastAction()
         else:
             print(f"Unknown action type: {self.type}", flush=True)
             return False
@@ -185,7 +206,7 @@ class SequenceAction:
     def performWLEDInternalAction(self, wled: WLEDManager):
         # Cache internal WLED address
         self.address = wled.address
-        pass
+        return self.performWLEDAction()
 
     def performWLEDAction(self):
         """Performs a WLED action."""

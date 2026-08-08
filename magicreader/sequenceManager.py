@@ -1,6 +1,5 @@
 import json
 from sequence import Sequence
-from dataclasses import asdict
 
 class SequenceManager:
 
@@ -38,7 +37,11 @@ class SequenceManager:
         try:
             # Save as json to file
             with open('data/sequences.json', 'w') as file:
-                json.dump(self.sequences, file)
+                data = {}
+                for id, sequence in self.sequences.items():
+                    if isinstance(sequence, Sequence):
+                        data[id] = sequence.toDict()
+                json.dump(data, file, indent=4)
                 return True
         except:
             print("ERROR saving sequences.json", flush=True)
@@ -63,7 +66,7 @@ class SequenceManager:
         found = []
         # Iterate sequences
         for id, sequence in self.sequences.items():
-            found.append(asdict(sequence))
+            found.append(sequence.toApiDict())
         # Return list
         return found
 
