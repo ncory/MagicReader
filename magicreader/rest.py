@@ -28,10 +28,10 @@ class RestQueue:
                 self.is_active = False
                 return
             # Otherwise, do we have a tuple?
-            if isinstance(event, tuple) and len(event) == 4:
+            if isinstance(event, tuple) and len(event) == 5:
                 # Make REST call
-                url, method, playload, isJson = event
-                RestHelpers.makeRestCall(url, method, playload, isJson)
+                url, method, payload, isJson, isUrlEncoding = event
+                RestHelpers.makeRestCall(url, method, payload, isJson, isUrlEncoding)
                 #print(f"REST call completed: {method}: {url}", flush=True)
             else:
                 print(f"Unknown event in REST queue: {event}", flush=True)
@@ -41,32 +41,38 @@ class RestQueue:
         # Add 'False' to queue - means shutdown
         self.queue.put((0, False))
     
-    def makeRestCallAsync(self, url, method = 'GET', playload = None, isJson = False):
+    def makeRestCallAsync(self, url, method = 'GET', payload = None, isJson = False, isUrlEncoded = False):
         """Queues a REST call to be made later."""
         #print(f"Queueing REST Call: {method}: {url}", flush=True)
-        self.queue.put((10,(url, method, playload, isJson)))
+        self.queue.put((10,(url, method, payload, isJson, isUrlEncoded)))
 
 
 class RestHelpers:
     _http_obj = Http(timeout=0.5)
 
     @staticmethod
-    def makeRestCall(url, method = 'GET', playload = None, isJson = False):
-        """Makes the specified HTTP call with an optional playlod and JSON content type."""
+    def makeRestCall(url, method = 'GET', payload = None, isJson = False, isUrlEncoded = False):
+        """Makes the specified HTTP call with an optional paylod and JSON content type."""
         print(f"REST Call: {method}: {url}", flush=True)
         try:
-            # Use JSON content-type?
+            # Body content
             if isJson:
                 message_headers = {'Content-Type': 'application/json; charset=UTF-8'}
+                body = payload
+            elif isUrlEncoded:
+                message_headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}
+                body = payload
             else:
                 message_headers = {}
+                body = None
             # Make HTTP call
             response = RestHelpers._http_obj.request(
                 uri = url,
                 method = method,
+                body = body,
                 headers = message_headers
             )
-            #print(response, flush=True
+            #print(response, flush=True)
         except Exception as e:
             print(f"Error making REST call: {e}", flush=True)
 

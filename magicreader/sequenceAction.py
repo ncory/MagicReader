@@ -326,7 +326,7 @@ class SequenceAction:
             # Construct URL
             url = f"http://{self.address}/command"
             # Make REST call
-            RestQueue().makeRestCallAsync(url, "POST", self.data)
+            RestQueue().makeRestCallAsync(url, "POST", self.data, isUrlEncoded=True)
         except Exception as e:
             print(f"Error sending Magic Band broadcast: {e}", flush=True)
             return False
