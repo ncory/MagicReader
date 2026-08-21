@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 
 class ActionType(str, Enum):
+    Delay = "delay"
     WLEDInternal = "wledInternal"
     WLEDExternal = "wledExternal"
     SoundFile = "soundFile"
@@ -40,22 +41,29 @@ class SequenceAction:
         self.command = None
 
     def toDict(self) -> dict:
+        type_value = self.type.value if isinstance(self.type, ActionType) else self.type
         data = {
-            "type": self.type.value if isinstance(self.type, ActionType) else self.type,
+            "type": type_value,
             "delay": self.delay
         }
-        if self.url is not None:
+
+        if self.type == ActionType.URL:
             data["url"] = self.url
-        if self.method is not None:
             data["method"] = self.method
-        if self.data is not None:
+            if self.data is not None:
+                data["data"] = self.data
+        elif self.type in [ActionType.WLEDInternal, ActionType.SoundFile]:
             data["data"] = self.data
-        if self.address is not None:
+        elif self.type == ActionType.WLEDExternal:
             data["address"] = self.address
-        if self.port is not None and self.port >= 0:
+            data["data"] = self.data
+        elif self.type in [ActionType.BrightSign, ActionType.ChromaTeq]:
+            data["address"] = self.address
             data["port"] = self.port
-        if self.command is not None:
             data["command"] = self.command
+        elif self.type == ActionType.MagicBandBroadcast:
+            data["address"] = self.address
+            data["data"] = self.data
         return data
     
     @classmethod
@@ -88,7 +96,9 @@ class SequenceAction:
         if command is not None and not isinstance(command, str):
             command = None
         # Which type?
-        if type == 'wledInternal':
+        if type == 'delay':
+            return SequenceAction.new_action_delay(delay)
+        elif type == 'wledInternal':
             if not isinstance(dataObj, int):
                 dataObj = 0
             return SequenceAction.new_action_wled_internal(dataObj, delay)
@@ -115,6 +125,13 @@ class SequenceAction:
             print(f"Unknown action type: {type}", flush=True)
             return None
     
+    @classmethod
+    @staticmethod
+    def new_action_delay(delay: int = 0):
+        action = SequenceAction(ActionType.Delay)
+        action.delay = delay
+        return action
+
     @classmethod
     @staticmethod
     def new_action_wled_internal(preset: int = 0, delay: int = 0):
@@ -187,6 +204,8 @@ class SequenceAction:
         # Which action type?
         if self.type == ActionType.WLEDInternal:
             return self.performWLEDInternalAction(wled)
+        elif self.type == ActionType.Delay:
+            return True
         elif self.type == ActionType.WLEDExternal:
             return self.performWLEDAction()
         elif self.type == ActionType.SoundFile:

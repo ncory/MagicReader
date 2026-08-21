@@ -1,6 +1,4 @@
 from sequenceAction import SequenceAction
-from wled import WLEDManager
-from soundManager import SoundManager
 from dataclasses import dataclass
 
 @dataclass
@@ -13,10 +11,7 @@ class Sequence:
     def __init__(self, id: str, name: str):
         self.id = id
         self.name = name
-        self.wled_preset = -1
-        self.music = None
         self.cancel_allowed = True
-        self.wait_delay = 0
         self.actions = []
     
     @classmethod
@@ -31,22 +26,10 @@ class Sequence:
         # Check name
         if sequence.name is not None and not isinstance(sequence.name, str):
             sequence.name = None
-        # WLED preset
-        sequence.wled_preset = data.get('wled_preset', -1)
-        if sequence.wled_preset is not None and not isinstance(sequence.wled_preset, int):
-            sequence.wled_preset = -1
-        # Music
-        sequence.music = data.get('music', None)
-        if sequence.music is not None and not isinstance(sequence.music, str):
-            sequence.music = None
         # Cancel allowed
         sequence.cancel_allowed = data.get('cancel_allowed', True)
         if sequence.cancel_allowed is not None and not isinstance(sequence.cancel_allowed, bool):
             sequence.cancel_allowed = True
-        # Wait delay
-        sequence.wait_delay = data.get('wait_delay', 0)
-        if sequence.wait_delay is not None and not isinstance(sequence.wait_delay, int):
-            sequence.wait_delay = 0
         # Actions
         actions = data.get('actions', [])
         if isinstance(actions, list):
@@ -67,10 +50,7 @@ class Sequence:
     def toDict(self) -> dict:
         return {
             "name": self.name,
-            "wled_preset": self.wled_preset,
-            "music": self.music,
             "actions": [action.toDict() for action in self.actions if isinstance(action, SequenceAction)],
-            "wait_delay": self.wait_delay,
             "cancel_allowed": self.cancel_allowed
         }
 
@@ -99,17 +79,11 @@ class Sequence:
         else:
             print("ERROR: Action must be a SequenceAction object", flush=True)
     
-    def play(self, wled: WLEDManager, soundManager: SoundManager):
+    def play(self, wled, soundManager):
         """Plays the sequence by executing all actions in order."""
         # Log sequence with name
         if self.name is not None and isinstance(self.name, str):
             print(f"Playing sequence: {self.name} ({self.id})", flush=True)
-        # Is there an LED preset to recall?
-        if self.wled_preset is not None and isinstance(self.wled_preset, int) and self.wled_preset >= 0:
-            wled.callLedPreset(self.wled_preset)
-        # Play music?
-        if self.music is not None and isinstance(self.music, str):
-            soundManager.playMusic(self.music)        
         # Perform all actions
         for action in self.actions:
             if isinstance(action, SequenceAction):

@@ -500,22 +500,20 @@ function displaySequencesTable() {
                     if(seq_name == null || !isString(seq_name)) {
                         seq_name = "";
                     }
-                    let wledPreset = getNumberFromDict(seq, 'wled_preset');
-                    let music = getStringFromDict(seq, 'music') || "";
                     let cancel_allowed = getBoolFromDict(seq, 'cancel_allowed');
                     let actions_count = getActionsCount(seq);
                     // Add row
-                    addSequenceToTable(sequencesTableBody, seq_id, seq_name, wledPreset, music, cancel_allowed, actions_count);
+                    addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed, actions_count);
                 }
             }
         });
     } else {
         sequencesCount.text("");
-        sequencesTableBody.append($('<tr>').append($('<td colspan="7" class="text-secondary">').text("No sequences loaded.")));
+        sequencesTableBody.append($('<tr>').append($('<td colspan="5" class="text-secondary">').text("No sequences loaded.")));
     }
 }
 
-function addSequenceToTable(sequencesTableBody, seq_id, seq_name, wledPreset, music, cancel_allowed, actions_count) {
+function addSequenceToTable(sequencesTableBody, seq_id, seq_name, cancel_allowed, actions_count) {
     // Create row
     let tr = $("<tr>");
     // Add id
@@ -524,12 +522,6 @@ function addSequenceToTable(sequencesTableBody, seq_id, seq_name, wledPreset, mu
     // Add sequence name
     let td_seq_name = $('<td>').text(seq_name);
     tr.append(td_seq_name);
-    // Add WLED preset
-    let td_wled = $('<td>').text(wledPreset == null ? "" : wledPreset);
-    tr.append(td_wled);
-    // Add music
-    let td_music = $('<td>').text(music);
-    tr.append(td_music);
     // Add cancel allowed
     let td_cancel_allowed = $('<td>').text(cancel_allowed ? "Yes" : "No");
     tr.append(td_cancel_allowed);
@@ -557,13 +549,6 @@ function getNumberFromDict(dict, key) {
         return isNumber(val) ? val : null;
     }
     return null;
-}
-
-function getIntegerFromInput(selector, defaultValue = 0) {
-    let raw = $(selector).val();
-    if (raw === null || raw === '') return defaultValue;
-    let parsed = parseInt(raw, 10);
-    return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
 function getActionsCount(sequence) {
@@ -601,9 +586,6 @@ function buttonSequenceEdit(element) {
     $('#editSequenceModalTitle').text("Edit Sequence");
     $('#editSequenceSequenceId').val(seq_id);
     $('#editSequenceName').val(getStringFromDict(seq, 'name') || "");
-    $('#editSequenceWLED').val(getNumberFromDict(seq, 'wled_preset'));
-    $('#editSequenceMusic').val(getStringFromDict(seq, 'music') || "");
-    $('#editSequenceWaitDelay').val(getNumberFromDict(seq, 'wait_delay'));
     $('#editSequenceCancelAllowed').prop('checked', getBoolFromDict(seq, 'cancel_allowed'));
     displaySequenceActions(seq);
     $('#editSequenceModal').modal('show');
@@ -660,14 +642,9 @@ function buttonEditSequenceSave() {
 }
 
 function buildSequencePayload(seqId) {
-    let wledPreset = getIntegerFromInput('#editSequenceWLED', -1);
-    let waitDelay = getIntegerFromInput('#editSequenceWaitDelay', 0);
     return {
         id: seqId,
         name: $('#editSequenceName').val(),
-        wled_preset: wledPreset >= 0 ? wledPreset : null,
-        music: $('#editSequenceMusic').val() || null,
-        wait_delay: waitDelay >= 0 ? waitDelay : 0,
         cancel_allowed: $('#editSequenceCancelAllowed').is(':checked'),
         actions: collectSequenceActions()
     };
@@ -676,9 +653,6 @@ function buildSequencePayload(seqId) {
 function clearEditSequenceModal() {
     $('#editSequenceSequenceId').val('');
     $('#editSequenceName').val('');
-    $('#editSequenceWLED').val('');
-    $('#editSequenceMusic').val('');
-    $('#editSequenceWaitDelay').val('');
     $('#editSequenceCancelAllowed').prop('checked', true);
     $('#editSequenceActionsSummary').text("0 actions");
     $('#editSequenceActionsTable_body').empty();
@@ -720,6 +694,7 @@ function addSequenceActionRow(action) {
 function createActionTypeSelect(type) {
     let select = $('<select class="form-select form-select-sm action-type" onchange="actionTypeChanged(this);">');
     [
+        ["delay", "Delay"],
         ["url", "URL"],
         ["wledInternal", "WLED Internal"],
         ["wledExternal", "WLED External"],
@@ -757,12 +732,14 @@ function createActionRowButtons() {
 function getActionTarget(action) {
     let type = getStringFromDict(action, 'type') || "url";
     if (type === "url") return getStringFromDict(action, 'url') || "";
+    if (type === "delay") return "";
     return getStringFromDict(action, 'address') || "";
 }
 
 function getActionValue(action) {
     let type = getStringFromDict(action, 'type') || "url";
     if (type === "url") return stringifyActionData(action.data);
+    if (type === "delay") return "";
     if (type === "wledInternal" || type === "wledExternal") return action.data == null ? "" : action.data;
     if (type === "soundFile") return action.data || "";
     if (type === "magicBandBroadcast") return action.data || "";
@@ -790,27 +767,37 @@ function updateActionRowForType(row) {
     value.attr('placeholder', 'Value');
     port.prop('disabled', false);
 
-    if (type === "url") {
+    if (type === "delay") {
+        target.prop('disabled', true).val('').attr('placeholder', 'No target');
+        value.prop('disabled', true).val('').attr('placeholder', 'Delay seconds');
+        port.prop('disabled', true).val('');
+    } else if (type === "url") {
         target.attr('placeholder', 'URL');
+        value.prop('disabled', false);
         port.prop('disabled', true).val('');
     } else if (type === "wledInternal") {
         target.prop('disabled', true).val('').attr('placeholder', 'Internal WLED');
+        value.prop('disabled', false);
         value.attr('placeholder', 'Preset');
         port.prop('disabled', true).val('');
     } else if (type === "wledExternal") {
         target.attr('placeholder', 'WLED address');
+        value.prop('disabled', false);
         value.attr('placeholder', 'Preset');
         port.prop('disabled', true).val('');
     } else if (type === "soundFile") {
         target.prop('disabled', true).val('').attr('placeholder', 'Sound Manager');
+        value.prop('disabled', false);
         value.attr('placeholder', 'Filename');
         port.prop('disabled', true).val('');
     } else if (type === "magicBandBroadcast") {
         target.attr('placeholder', 'Address');
+        value.prop('disabled', false);
         value.attr('placeholder', 'Data');
         port.prop('disabled', true).val('');
     } else {
         target.attr('placeholder', 'Address');
+        value.prop('disabled', false);
         value.attr('placeholder', 'Command');
         port.attr('placeholder', 'Port');
     }
@@ -837,7 +824,9 @@ function buildActionFromRow(row) {
         delay: delay
     };
 
-    if (type === "url") {
+    if (type === "delay") {
+        // Delay-only action uses the shared delay field.
+    } else if (type === "url") {
         action.url = target;
         action.method = row.find('.action-method').val() || "GET";
         action.data = parseActionData(value);

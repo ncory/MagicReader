@@ -610,21 +610,8 @@ class MagicBand():
         if not sequence.play(self.wledManager, self.soundManager):
             print("Failed to play sequence", flush=True)
             return False
-        # Done playing sequence
-        # Setup next read
-        # Use delay?
-        delay = 0
-        if sequence.wait_delay is not None and isinstance(sequence.wait_delay, int):
-            delay = sequence.wait_delay
-        # Allow cancel?
-        allow_read = True
-        if sequence.cancel_allowed is not None and isinstance(sequence.cancel_allowed, bool):
-            allow_read = sequence.cancel_allowed
-        if allow_read:
-            read_delay = 2
-        else:
-            read_delay = -1
-        self.startWaitModeTimer(delay, read_delay)
+        # Done playing sequence - setup next read
+        self.startWaitModeTimer(0)
         return True
 
 
@@ -842,4 +829,3 @@ class MagicBand():
             self.startReadDelayTimer(5)
         # Return what we found
         return result
-
