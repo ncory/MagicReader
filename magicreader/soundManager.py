@@ -95,7 +95,7 @@ class SoundManager:
                 print("Error playing sound", flush=True)
                 print(e, flush=True)
 
-    def playMusic(self, filename: str):
+    def playMusic(self, filename: str, stopCurrent: bool = True):
         """Plays the specified file as PyGame music"""
         # Append 'Sounds/' to filename
         if filename is None or not isinstance(filename, str) or filename == '':
@@ -104,11 +104,13 @@ class SoundManager:
             filename = 'Sounds/' + filename
         # Check if file exists
         if not path.exists(filename):
-            print("Missing msuic file :" + filename, flush=True)
+            print("Missing music file :" + filename, flush=True)
             return
         # Try playing as music
         try:
             pygame.mixer.music.load(filename)
+            if stopCurrent:
+                pygame.mixer.music.stop()
             pygame.mixer.music.play()
         except Exception as e:
             print(f"Error playing music file: {filename}", flush=True)
