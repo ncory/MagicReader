@@ -699,6 +699,7 @@ function createActionTypeSelect(type) {
         ["wledInternal", "WLED Internal"],
         ["wledExternal", "WLED External"],
         ["soundFile", "Sound File"],
+        ["musicFile", "Music File"],
         ["brightsign", "BrightSign"],
         ["chromateq", "ChromaTeq"],
         ["magicBandBroadcast", "MagicBand Broadcast"]
@@ -741,7 +742,7 @@ function getActionValue(action) {
     if (type === "url") return stringifyActionData(action.data);
     if (type === "delay") return "";
     if (type === "wledInternal" || type === "wledExternal") return action.data == null ? "" : action.data;
-    if (type === "soundFile") return action.data || "";
+    if (type === "soundFile" || type === "musicFile") return action.data || "";
     if (type === "magicBandBroadcast") return action.data || "";
     return getStringFromDict(action, 'command') || "";
 }
@@ -788,7 +789,12 @@ function updateActionRowForType(row) {
     } else if (type === "soundFile") {
         target.prop('disabled', true).val('').attr('placeholder', 'Sound Manager');
         value.prop('disabled', false);
-        value.attr('placeholder', 'Filename');
+        value.attr('placeholder', 'Sound filename');
+        port.prop('disabled', true).val('');
+    } else if (type === "musicFile") {
+        target.prop('disabled', true).val('').attr('placeholder', 'Sound Manager');
+        value.prop('disabled', false);
+        value.attr('placeholder', 'Music filename');
         port.prop('disabled', true).val('');
     } else if (type === "magicBandBroadcast") {
         target.attr('placeholder', 'Address');
@@ -837,7 +843,7 @@ function buildActionFromRow(row) {
         action.address = target;
         action.data = parseInt(value, 10);
         if (!Number.isFinite(action.data)) action.data = 0;
-    } else if (type === "soundFile") {
+    } else if (type === "soundFile" || type === "musicFile") {
         action.data = value;
     } else if (type === "magicBandBroadcast") {
         action.address = target;

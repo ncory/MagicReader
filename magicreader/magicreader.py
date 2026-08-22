@@ -107,7 +107,8 @@ class MagicBand():
         if not self.sequence_manager.loadFromFile():
             print("ERROR: Failed to load sequences from file", flush=True)
             return False
-        # Load sequences from file
+        self.sequence_manager.preCacheSoundFiles(self.soundManager)
+        # Load tap-in presets from file
         if not self.tapInPresetsManager.loadFromFile():
             print("ERROR: Failed to load tap-in presets from file", flush=True)
             return False

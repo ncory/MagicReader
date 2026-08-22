@@ -1,5 +1,7 @@
 import json
 from sequence import Sequence
+from sequenceAction import ActionType, SequenceAction
+from soundManager import SoundManager
 
 class SequenceManager:
 
@@ -32,6 +34,33 @@ class SequenceManager:
             print(f"ERROR while loading sequences: {e}", flush=True)
         # If we got here we failed
         return False
+
+    def preCacheSoundFiles(self, soundManager: SoundManager):
+        """Preloads SoundFile sequence actions into the sound manager cache."""
+        if soundManager is None or not isinstance(soundManager, SoundManager):
+            print("Invalid SoundManager provided", flush=True)
+            return False
+
+        sound_files = set()
+        for id, sequence in self.sequences.items():
+            if not isinstance(sequence, Sequence):
+                continue
+            for action in sequence.actions:
+                if (
+                    isinstance(action, SequenceAction)
+                    and action.type == ActionType.SoundFile
+                    and isinstance(action.data, str)
+                    and action.data != ''
+                ):
+                    sound_files.add(action.data)
+
+        loaded_count = 0
+        for filename in sound_files:
+            if soundManager.preLoadSound(filename, filename):
+                loaded_count += 1
+
+        print(f"Pre-cached {loaded_count} sequence sound files", flush=True)
+        return True
 
     def saveToFile(self):
         try:

@@ -13,6 +13,7 @@ class ActionType(str, Enum):
     WLEDInternal = "wledInternal"
     WLEDExternal = "wledExternal"
     SoundFile = "soundFile"
+    MusicFile = "musicFile"
     URL = "url"
     BrightSign = "brightsign"
     ChromaTeq = "chromateq"
@@ -52,7 +53,7 @@ class SequenceAction:
             data["method"] = self.method
             if self.data is not None:
                 data["data"] = self.data
-        elif self.type in [ActionType.WLEDInternal, ActionType.SoundFile]:
+        elif self.type in [ActionType.WLEDInternal, ActionType.SoundFile, ActionType.MusicFile]:
             data["data"] = self.data
         elif self.type == ActionType.WLEDExternal:
             data["address"] = self.address
@@ -111,6 +112,11 @@ class SequenceAction:
                 print("Invalid sound file name provided", flush=True)
                 dataObj = None
             return SequenceAction.new_action_sound_file(dataObj, delay)
+        elif type == 'musicFile':
+            if not isinstance(dataObj, str):
+                print("Invalid music file name provided", flush=True)
+                dataObj = None
+            return SequenceAction.new_action_music_file(dataObj, delay)
         elif type == 'url':
             return SequenceAction.new_action_url(url, method, dataObj, delay)
         elif type == 'brightsign':
@@ -153,6 +159,14 @@ class SequenceAction:
     @staticmethod
     def new_action_sound_file(filename: str, delay: int = 0):
         action = SequenceAction(ActionType.SoundFile)
+        action.data = filename
+        action.delay = delay
+        return action
+
+    @classmethod
+    @staticmethod
+    def new_action_music_file(filename: str, delay: int = 0):
+        action = SequenceAction(ActionType.MusicFile)
         action.data = filename
         action.delay = delay
         return action
@@ -210,6 +224,8 @@ class SequenceAction:
             return self.performWLEDAction()
         elif self.type == ActionType.SoundFile:
             return self.performSoundFileAction(soundManager)
+        elif self.type == ActionType.MusicFile:
+            return self.performMusicFileAction(soundManager)
         if self.type == ActionType.URL:
             return self.performUrlAction()
         elif self.type == ActionType.BrightSign:
@@ -259,6 +275,21 @@ class SequenceAction:
             return False
         # Play the sound file
         print(f"Playing sound file: {self.data}", flush=True)
+        soundManager.playSound(self.data)
+        return True
+
+    def performMusicFileAction(self, soundManager: SoundManager):
+        """Performs a music file action."""
+        # Check for valid sound manager
+        if soundManager is None or not isinstance(soundManager, SoundManager):
+            print("Invalid SoundManager provided", flush=True)
+            return False
+        # Check for valid filename
+        if self.data is None or not isinstance(self.data, str):
+            print("Invalid music file name provided", flush=True)
+            return False
+        # Play the music file
+        print(f"Playing music file: {self.data}", flush=True)
         soundManager.playMusic(self.data)
         return True
 
