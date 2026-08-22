@@ -52,7 +52,6 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     def status():
         statusDict = {
             "state": magicreader.state.value,
-            "lastTapInPreset": magicreader.lastTapInPreset,
             "status": magicreader.status,
             "isError": magicreader.isError,
             "allowRead": magicreader.allowRead
@@ -83,16 +82,6 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     def control_disableRead():
         magicreader.api_disableRead()
         return {"result": "ok"}
-    
-    @app.route('/control/tapInPreset/<id>')
-    def control_tapInPreset(id):
-        success = False
-        # Play tap-in preset
-        if id is not None:
-            magicreader.api_playPlayTapInPreset(id)
-            return {"result": "ok"}
-        # Failed if we got here
-        return {"result": "error"}
     
     @app.route('/control/sequence/<seq_id>')
     def control_sequence(seq_id):
@@ -130,19 +119,6 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
         #os.system("/home/pi/magicreader/MagicWand.sh")
         os.system("sudo systemctl start MagicWand.service")
         return {"result": "ok"}
-    
-
-    ###### Tap-In Presets ######
-
-    @app.route('/tapInPresets')
-    def get_tapInPresets():
-        # Get list of tap-in presets from app
-        presets = magicreader.tapInPresetsManager.getTapInPresetNamesList()
-        # Return data
-        return {
-            "result": "ok",
-            "data": presets
-        }
     
 
     ###### Sequences ######
@@ -226,18 +202,17 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
                     name = request_data.get('name')
                     if not isinstance(name, str):
                         name = None
-                seq_id = None
-                if 'sequence' in request_data:
+                seq_ids = []
+                if 'sequences' in request_data:
+                    sequences_data = request_data.get('sequences')
+                    if isinstance(sequences_data, list):
+                        seq_ids = [seq_id for seq_id in sequences_data if isinstance(seq_id, str)]
+                elif 'sequence' in request_data:
                     seq_id = request_data.get('sequence')
-                    if not isinstance(seq_id, str):
-                        seq_id = None
-                tapInPresets = None
-                if 'tapInPresets' in request_data:
-                    tapInPresets = request_data.get('tapInPresets')
-                    if not isinstance(tapInPresets, list):
-                        tapInPresets = None
+                    if isinstance(seq_id, str):
+                        seq_ids = [seq_id]
                 # Process with band manager
-                result = magicreader.band_manager.updateBand(band_id, name, seq_id, tapInPresets)
+                result = magicreader.band_manager.updateBand(band_id, name, seq_ids)
                 if result:
                     # Done - now save to file
                     if not magicreader.band_manager.saveToFile():

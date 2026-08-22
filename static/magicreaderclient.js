@@ -1,6 +1,5 @@
 
 /////// Global Variables ///////
-var tapInPresets = null;
 var sequenceNames = null;
 var sequences = null;
 var bands = null;
@@ -58,7 +57,6 @@ function getBoolFromDict(dict, key, returnFalseNotNull = true) {
 $(function() {
     // Initial updates
     updateStatus();
-    getTapInPresetsList();
     getSequenceList();
     // Regular status updates
     setInterval(updateStatus, 1000);
@@ -66,7 +64,6 @@ $(function() {
 
 function onLoadMainPage() {
     displaySequences();
-    displayTapInPresets();
 }
 
 function onLoadBandsPage() {
@@ -136,15 +133,6 @@ function controlMagicWand() {
     makeApiCall('/control/magicWand');
 }
 
-function playTapInPreset(element) {
-    // Get preset id from data-id
-    let id = element.dataset.id
-    console.debug('playing tap-in: ' + id);
-    // Call API
-    makeApiCall('/control/tapInPreset/' + id);
-    console.debug('done with tap-in API call');
-}
-
 function playSequence(element) {
     // Get sequence name from data-sequence
     let sequence = element.dataset.sequence
@@ -194,15 +182,6 @@ function displayStatus() {
                 break;
             case "success":
                 statusDiv.text("Read ID - Success!");
-                break;
-            case "playingTapIn":
-                // Do we have a tap-in preset id?
-                if (statusCache.lastTapInPreset != null && statusCache.lastTapInPreset != '') {
-                    statusDiv.text("Playing Tap-In: " + getTapInName(statusCache.lastTapInPreset));
-                }
-                else {
-                    statusDiv.text("Playing Tap-In");
-                }
                 break;
             case "playingSequence":
                 // Do we have a sequence name?
@@ -256,84 +235,6 @@ function displayStatus() {
         $("#status-message").text("<< ERROR Loading Status >>").toggleClass('bg-danger', true);
         $("#status-readAllowed").text("");
     }
-}
-
-
-/////// Tap-In Functions ///////
-
-function getTapInPresetsList() {
-    // API Call
-    makeApiCall('/tapInPresets', 'GET',
-        function(response, textStatus, jqXHR) {
-            // Success
-            // Cache tap-in presets list
-            tapInPresets = response.data;
-            // Display tap-in presets buttons
-            displayTapInPresets();
-        },
-        function(jqXHR, textStatus, errorThrown) {
-            // ERROR
-            console.debug("ERROR loading tap-in presets:" + errorThrown);
-            tapInPresets = null;
-            // Display tap-in presets buttons
-            displayTapInPresets();
-        });
-}
-
-function getTapInName(id) {
-    if (tapInPresets != null && tapInPresets instanceof Array) {
-        var foundName = id;
-        tapInPresets.forEach((preset) => {
-            if("id" in preset) {
-                if (id == preset.id && "name" in preset) {
-                    foundName = preset.name;
-                }
-            }
-        });
-        return foundName;
-    }
-    return id;
-}
-
-function displayTapInPresets() {
-    // Remove all existing tap-in buttons
-    let presetsDiv = $('#tapInPresets');
-    presetsDiv.empty();
-    // Do we have available presets?
-    if (tapInPresets != null && tapInPresets instanceof Array) {
-        /// Success
-        tapInPresets.forEach((preset) => {
-            // Is this a valid object?
-            if (preset instanceof Object) {
-                // Get ID
-                if("id" in preset) {
-                    let id = preset.id;
-                    let presetName;
-                    // Name or use id?
-                    if ("name" in preset) {
-                        presetName = preset.name;
-                    } else {
-                        presetName = id;
-                    }
-                    // Add button
-                    addTapInPresetButton(presetsDiv, id, presetName);
-                }
-            }
-        });
-    } else {
-        /// ERROR - Do nothing
-    }
-}
-
-function addTapInPresetButton(div, id, name) {
-    // Create button
-    let newButton = $('<button type="button" class="sequence-button btn btn-primary" onclick="playTapInPreset(this)"></button>');
-    // Set id
-    newButton.attr("data-id", id);
-    // Set name
-    newButton.text(name);
-    // Add to parent div
-    div.append(newButton);
 }
 
 
@@ -410,8 +311,9 @@ function addSequenceButton(div, id, name) {
 function updateSequencesInSelect(sequencesSelect) {
     // Remove all existing sequence buttons
     sequencesSelect.empty();
-    // Add empty/none option
-    sequencesSelect.append($('<option selected value="">None</option>'));
+    if (!sequencesSelect.prop('multiple')) {
+        sequencesSelect.append($('<option selected value="">None</option>'));
+    }
     // Do we have available sequences?
     if (sequenceNames != null && sequenceNames instanceof Array) {
         /// Success
@@ -905,6 +807,36 @@ function getKnownBandsList() {
         });
 }
 
+function getBandSequenceIds(band) {
+    let found = [];
+    if (!isDict(band)) return found;
+    if (band.sequences instanceof Array) {
+        band.sequences.forEach((sequenceId) => {
+            if (isString(sequenceId) && sequenceId !== '') found.push(sequenceId);
+        });
+    } else {
+        let sequenceId = getStringFromDict(band, 'sequence');
+        if (sequenceId !== null && sequenceId !== '') found.push(sequenceId);
+    }
+    return found;
+}
+
+function getBandSequencesDisplayName(band) {
+    let sequenceIds = getBandSequenceIds(band);
+    return sequenceIds.map((sequenceId) => getSequenceName(sequenceId)).join(', ');
+}
+
+function getSelectedBandSequences(select) {
+    let selected = select.val();
+    if (selected instanceof Array) {
+        return selected.filter((sequenceId) => isString(sequenceId) && sequenceId !== '');
+    }
+    if (isString(selected) && selected !== '') {
+        return [selected];
+    }
+    return [];
+}
+
 function displayBands() {
     // Remove all existing bands frm table
     let bandsTableBody = $('#bandsTable_body');
@@ -926,15 +858,7 @@ function displayBands() {
                     if(band_name == null || !isString(band_name)) {
                         band_name = "";
                     }
-                    // Get sequence name
-                    let seq_name = null;
-                    if ("sequence" in band) {
-                        seq_name = getSequenceName(band.sequence);
-                    }
-                    else seq_name = band.sequence;
-                    if(seq_name == null || !isString(seq_name)) {
-                        seq_name = "";
-                    }
+                    let seq_name = getBandSequencesDisplayName(band);
                     // Add rw
                     addBandToTable(bandsTableBody, band_id, band_name, seq_name);
                 }
@@ -1029,7 +953,7 @@ function clearAddNewBandForm() {
     // Clear form
     $('#newBandBandId').val('');
     $('#newBandNickname').val('');
-    $('#newBandSequence').val('');
+    $('#newBandSequence').val([]);
 }
 
 function enableReadNewBandButton() {
@@ -1042,7 +966,7 @@ function buttonAddNewBandSave() {
     // Get values
     let bandId = $('#newBandBandId').val();
     let bandNickname = $('#newBandNickname').val();
-    let bandSequence = $('#newBandSequence').val();
+    let bandSequences = getSelectedBandSequences($('#newBandSequence'));
     // Validate
     if (!isString(bandId) || bandId.length < 1) {
         alert("Please enter a valid Band ID.");
@@ -1066,7 +990,7 @@ function buttonAddNewBandSave() {
             console.debug("ERROR adding new band:" + errorThrown);
             alert("Failed to add new band. Error contacting server.");
         },
-        {id: bandId, name: bandNickname, sequence: bandSequence});
+        {id: bandId, name: bandNickname, sequences: bandSequences});
 }
 
 function getBandFromCache(band_id) {
@@ -1095,11 +1019,11 @@ function buttonBandEdit(element) {
     if (band == null) return;
     // Get band data
     let bandNickname = getStringFromDict(band, 'name');
-    let bandSequence = getStringFromDict(band, 'sequence');
+    let bandSequences = getBandSequenceIds(band);
     // Populate edit bands form
     $('#editBandBandId').val(band_id);
     $('#editBandNickname').val(bandNickname);
-    $('#editBandSequence').val(bandSequence);
+    $('#editBandSequence').val(bandSequences);
     // Show edit bands form
     $('#editBandModal').modal('show');
 }
@@ -1108,7 +1032,7 @@ function buttonEditBandSave() {
     // Get values
     let bandId = $('#editBandBandId').val();
     let bandNickname = $('#editBandNickname').val();
-    let bandSequence = $('#editBandSequence').val();
+    let bandSequences = getSelectedBandSequences($('#editBandSequence'));
     // Validate
     if (!isString(bandId) || bandId.length < 1) {
         alert("Please enter a valid Band ID.");
@@ -1133,7 +1057,7 @@ function buttonEditBandSave() {
             console.debug("ERROR adding new band:" + errorThrown);
             alert("Failed to add new band. Error contacting server.");
         },
-        {id: bandId, name: bandNickname, sequence: bandSequence});
+        {id: bandId, name: bandNickname, sequences: bandSequences});
 }
 
 function buttonBandDelete(element) {

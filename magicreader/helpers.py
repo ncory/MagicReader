@@ -9,7 +9,6 @@ class State(Enum):
     WaitingForTap = "waitingForTap"
     Checking = "checking"
     TapSuccess = "success"
-    PlayingTapIn = "playingTapIn"
     PlayingSequence = "playingSequence"
     Blackout = "blackout"
     Error = "error"
@@ -19,7 +18,6 @@ class State(Enum):
 class AppEventType(OrderedEnum):
     ReadRfid = "readRfid"
     EnterWaitMode = "enterWaitMode"
-    PlayTapInPreset = "playTapInPreset"
     PlaySequence = "playSequence"
     StopSequence = "stopSequence"
     Blackout = "blackout"
