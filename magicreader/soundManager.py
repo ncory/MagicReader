@@ -61,14 +61,23 @@ class SoundManager:
 
 ######### Playback #########
 
-    def playSound(self, soundName: str):
+    def playSound(self, soundName: str, loadIfNeeded: bool = True):
         """Plays the specified sound by name."""
         if soundName is None or not isinstance(soundName, str) or soundName == '':
             print("Invalid sound name provided", flush=True)
             return
         if soundName not in self.sounds:
             print(f"Sound '{soundName}' not found in sound manager", flush=True)
-            return
+            if loadIfNeeded:
+                # Attempt to load the sound file with the same name
+                sound = self.loadSound(soundName)
+                if sound is not None:
+                    self.sounds[soundName] = sound
+                else:
+                    print(f"Failed to load sound '{soundName}'", flush=True)
+                    return
+            else:
+                return
         sound = self.sounds[soundName]
         if sound is None:
             print(f"Sound '{soundName}' is not loaded", flush=True)
