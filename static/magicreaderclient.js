@@ -3,8 +3,10 @@
 var sequenceNames = null;
 var sequences = null;
 var bands = null;
+var sounds = null;
 var statusCache = null;
 var editSequenceOriginalId = null;
+var renameSoundOriginalName = null;
 
 
 /*
@@ -83,6 +85,11 @@ function onLoadSequencesPage() {
     getFullSequenceList();
 }
 
+function onLoadSoundsPage() {
+    displaySoundsTable();
+    getSoundsList();
+}
+
 
 /////// API Functions ///////
 
@@ -95,6 +102,18 @@ function makeApiCall(endpoint, method='GET', callback_success=null, callback_err
         error: callback_error,
         contentType: 'application/json',
         data: data ? JSON.stringify(data) : null,
+    });
+}
+
+function makeUploadApiCall(endpoint, formData, callback_success=null, callback_error=null) {
+    $.ajax({
+        url: endpoint,
+        method: 'POST',
+        success: callback_success,
+        error: callback_error,
+        data: formData,
+        processData: false,
+        contentType: false,
     });
 }
 
@@ -791,6 +810,190 @@ function buttonDeleteSequenceAction(element) {
 function updateSequenceActionsSummary() {
     let count = $('#editSequenceActionsTable_body tr.sequence-action-row').length;
     $('#editSequenceActionsSummary').text(count + (count === 1 ? " action" : " actions"));
+}
+
+
+/////// Sound Functions ///////
+
+function getSoundsList() {
+    makeApiCall('/sounds', 'GET',
+        function(response, textStatus, jqXHR) {
+            sounds = getDataFromSuccessfulApiResponse(response);
+            displaySoundsTable();
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR loading sounds:" + errorThrown);
+            sounds = null;
+            displaySoundsTable();
+        });
+}
+
+function displaySoundsTable() {
+    let soundsTableBody = $('#soundsTable_body');
+    let soundsCount = $('#soundsTable-count');
+    soundsTableBody.empty();
+    if (!soundsTableBody.length) return;
+    if (sounds != null && sounds instanceof Array) {
+        soundsCount.text(sounds.length + " total");
+        if (sounds.length < 1) {
+            soundsTableBody.append($('<tr>').append($('<td colspan="5" class="text-secondary">').text("No sound files found.")));
+            return;
+        }
+        sounds.forEach((sound) => {
+            if (isDict(sound)) {
+                let filename = getStringFromDict(sound, 'filename');
+                if (filename != null) {
+                    addSoundToTable(soundsTableBody, sound);
+                }
+            }
+        });
+    } else {
+        soundsCount.text("");
+        soundsTableBody.append($('<tr>').append($('<td colspan="5" class="text-secondary">').text("No sound files loaded.")));
+    }
+}
+
+function addSoundToTable(soundsTableBody, sound) {
+    let filename = getStringFromDict(sound, 'filename');
+    let size = getNumberFromDict(sound, 'size') || 0;
+    let modified = getNumberFromDict(sound, 'modified');
+    let tr = $('<tr>');
+    tr.append($('<td class="sound-file-name">').append($('<code>').text(filename)));
+    tr.append($('<td>').text(formatFileSize(size)));
+    tr.append($('<td>').text(formatTimestamp(modified)));
+    tr.append($('<td class="sound-preview-cell">').append(createSoundAudioPlayer(filename, modified)));
+
+    let tdButtons = $('<td>');
+    let buttons = $('<div class="btn-group btn-group-sm" role="group">');
+    buttons.append($('<button type="button" class="btn btn-secondary" onclick="buttonSoundRename(this)">Rename</button>')
+        .attr('data-sound', filename));
+    buttons.append($('<button type="button" class="btn btn-danger" onclick="buttonSoundDelete(this)">Delete</button>')
+        .attr('data-sound', filename));
+    tdButtons.append(buttons);
+    tr.append(tdButtons);
+    soundsTableBody.append(tr);
+}
+
+function createSoundAudioPlayer(filename, modified) {
+    return $('<audio controls preload="metadata" class="sound-player">')
+        .attr('src', getSoundFileUrl(filename, modified));
+}
+
+function getSoundFileUrl(filename, modified=null) {
+    let url = '/sound/' + encodeURIComponent(filename);
+    if (modified != null) {
+        url += '?v=' + encodeURIComponent(modified);
+    }
+    return url;
+}
+
+function formatFileSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return "";
+    if (bytes < 1024) return bytes + " B";
+    let units = ["KB", "MB", "GB"];
+    let value = bytes / 1024;
+    for (let i = 0; i < units.length; i++) {
+        if (value < 1024 || i === units.length - 1) {
+            return value.toFixed(value < 10 ? 1 : 0) + " " + units[i];
+        }
+        value = value / 1024;
+    }
+    return bytes + " B";
+}
+
+function formatTimestamp(timestamp) {
+    if (!Number.isFinite(timestamp)) return "";
+    return new Date(timestamp * 1000).toLocaleString();
+}
+
+function buttonUploadSound() {
+    let input = $('#newSoundFile')[0];
+    if (input == null || input.files == null || input.files.length < 1) {
+        $('#soundsUploadStatus').text("Choose a sound file first.");
+        return;
+    }
+    let formData = new FormData();
+    formData.append('file', input.files[0]);
+    setUploadSoundButtonEnabled(false);
+    $('#soundsUploadStatus').text("Uploading...");
+    makeUploadApiCall('/sounds', formData,
+        function(response, textStatus, jqXHR) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
+                sounds = data;
+                input.value = '';
+                $('#soundsUploadStatus').text("Upload complete.");
+                displaySoundsTable();
+            } else {
+                $('#soundsUploadStatus').text("Upload failed. Check the filename and extension.");
+            }
+            setUploadSoundButtonEnabled(true);
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR uploading sound:" + errorThrown);
+            $('#soundsUploadStatus').text("Upload failed. Error contacting server.");
+            setUploadSoundButtonEnabled(true);
+        });
+}
+
+function setUploadSoundButtonEnabled(enabled) {
+    $('#button-uploadSound').prop('disabled', !enabled);
+    $('#button-uploadSound-spinner').toggleClass('d-none', enabled);
+    $('#button-uploadSound-text').text(enabled ? "Upload" : "Uploading");
+}
+
+function buttonSoundRename(element) {
+    let filename = element.dataset.sound;
+    renameSoundOriginalName = filename;
+    $('#renameSoundOriginalName').val(filename);
+    $('#renameSoundNewName').val(filename);
+    $('#renameSoundModal').modal('show');
+}
+
+function buttonRenameSoundSave() {
+    let newFilename = $('#renameSoundNewName').val();
+    if (!isString(newFilename) || newFilename.trim().length < 1) {
+        alert("Please enter a valid filename.");
+        return;
+    }
+    newFilename = newFilename.trim();
+    makeApiCall('/sound/' + encodeURIComponent(renameSoundOriginalName), 'PUT',
+        function(response, textStatus, jqXHR) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
+                sounds = data;
+                displaySoundsTable();
+                $('#renameSoundModal').modal('hide');
+            } else {
+                alert("Failed to rename sound. Check that the new name uses a supported audio extension and does not already exist.");
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR renaming sound:" + errorThrown);
+            alert("Failed to rename sound. Error contacting server.");
+        },
+        {filename: newFilename});
+}
+
+function buttonSoundDelete(element) {
+    let filename = element.dataset.sound;
+    if (!confirm("Are you sure you want to delete sound file " + filename + "?")) {
+        return;
+    }
+    makeApiCall('/sound/' + encodeURIComponent(filename), 'DELETE',
+        function(response, textStatus, jqXHR) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
+                sounds = data;
+                displaySoundsTable();
+            } else {
+                alert("Failed to delete sound. Server returned empty result.");
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR deleting sound:" + errorThrown);
+            alert("Failed to delete sound. Error contacting server.");
+        });
 }
 
 

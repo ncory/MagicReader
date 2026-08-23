@@ -61,6 +61,31 @@ body {
     margin-bottom: 5px;
 }
 
+.sound-file-name {
+    min-width: 180px;
+    overflow-wrap: anywhere;
+}
+
+.sound-preview-cell {
+    min-width: 260px;
+}
+
+.sound-player {
+    width: 100%;
+    min-width: 240px;
+    max-width: 360px;
+}
+
+@media (max-width: 575.98px) {
+    .sound-preview-cell {
+        min-width: 220px;
+    }
+
+    .sound-player {
+        min-width: 210px;
+    }
+}
+
 
 
 

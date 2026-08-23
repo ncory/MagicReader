@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, send_from_directory
 from magicreader import MagicBand
 from sequenceManager import SequenceManager
 from sequence import Sequence
@@ -44,6 +44,12 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
         hostname = platform.node()
         host_url = f"http://{hostname}:{port}/"
         return render_template("sequences.html", host_address=host_url)
+
+    @app.route('/sounds.html')
+    def page_sounds():
+        hostname = platform.node()
+        host_url = f"http://{hostname}:{port}/"
+        return render_template("sounds.html", host_address=host_url)
 
 
     ###### Status ######
@@ -177,6 +183,53 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
                 result['result'] = "error"
                 return result
             return get_sequences()
+        return {"result": "error"}
+
+
+    ###### Sounds ######
+
+    @app.route('/sounds')
+    def get_sounds():
+        sounds = magicreader.soundManager.getSoundFilesList()
+        return {
+            "result": "ok",
+            "data": sounds
+        }
+
+    @app.route('/sounds', methods=['POST'])
+    def post_sound():
+        upload = request.files.get('file')
+        filename = request.form.get('filename')
+        if magicreader.soundManager.saveSoundFile(upload, filename):
+            return get_sounds()
+        return {"result": "error"}
+
+    @app.route('/sound/<path:filename>')
+    def get_sound(filename):
+        filename = magicreader.soundManager.normalizeSoundFilename(filename)
+        if filename is None or not magicreader.soundManager.isValidSoundFilename(filename):
+            return {"result": "error"}, 404
+        file_info = magicreader.soundManager.getSoundFileInfo(filename)
+        if file_info is None:
+            return {"result": "error"}, 404
+        return send_from_directory(magicreader.soundManager.getSoundsDirectory(), filename)
+
+    @app.route('/sound/<path:filename>', methods=['PUT'])
+    def put_sound(filename):
+        try:
+            request_data = request.get_json()
+            if request_data is not None and isinstance(request_data, dict):
+                new_filename = request_data.get('filename')
+                if magicreader.soundManager.renameSoundFile(filename, new_filename):
+                    return get_sounds()
+        except Exception as e:
+            print(f"ERROR renaming sound file: {e}", flush=True)
+        return {"result": "error"}
+
+    @app.route('/sound/<path:filename>', methods=['DELETE'])
+    def delete_sound(filename):
+        if magicreader.soundManager.deleteSoundFile(filename):
+            return get_sounds()
         return {"result": "error"}
     
 

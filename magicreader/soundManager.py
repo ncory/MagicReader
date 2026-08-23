@@ -6,6 +6,8 @@ import pygame
 
 
 class SoundManager:
+    SOUND_DIR = 'Sounds'
+    SOUND_EXTENSIONS = {'.aac', '.flac', '.m4a', '.mp3', '.ogg', '.wav'}
 
     def __init__(self):
         print("Creating Sound Manager", flush=True)
@@ -139,35 +141,147 @@ class SoundManager:
 
     def listAllSoundFiles(self):
         """Returns a list of all sound files in the Sounds directory."""
-        sound_dir = 'Sounds'
+        sound_dir = self.SOUND_DIR
         if not path.exists(sound_dir):
             print("Sounds directory does not exist", flush=True)
             return []
         # List all files in the Sounds directory
-        return [f for f in os.listdir(sound_dir) if os.path.isfile(os.path.join(sound_dir, f))]
+        return sorted([
+            f for f in os.listdir(sound_dir)
+            if os.path.isfile(os.path.join(sound_dir, f)) and self.isValidSoundFilename(f)
+        ], key=str.lower)
+
+    def getSoundsDirectory(self):
+        """Returns the absolute path to the Sounds directory."""
+        return path.abspath(self.SOUND_DIR)
+
+    def normalizeSoundFilename(self, filename: str):
+        """Returns a direct Sounds filename, or None if the name is unsafe."""
+        if filename is None or not isinstance(filename, str):
+            return None
+        filename = filename.strip()
+        if filename.startswith(self.SOUND_DIR + '/'):
+            filename = filename[len(self.SOUND_DIR) + 1:]
+        if filename == '' or filename in ['.', '..']:
+            return None
+        if '/' in filename or '\\' in filename or path.isabs(filename):
+            return None
+        return filename
+
+    def isValidSoundFilename(self, filename: str):
+        """Returns true if filename is safe and has a supported audio extension."""
+        filename = self.normalizeSoundFilename(filename)
+        if filename is None:
+            return False
+        ext = path.splitext(filename)[1].lower()
+        return ext in self.SOUND_EXTENSIONS
+
+    def getSoundFilePath(self, filename: str):
+        """Returns the absolute path to a sound file, or None if invalid."""
+        filename = self.normalizeSoundFilename(filename)
+        if filename is None or not self.isValidSoundFilename(filename):
+            return None
+        return path.join(self.getSoundsDirectory(), filename)
+
+    def getSoundFileInfo(self, filename: str):
+        """Returns browser-friendly metadata for a sound file."""
+        filename = self.normalizeSoundFilename(filename)
+        file_path = self.getSoundFilePath(filename)
+        if file_path is None or not path.exists(file_path) or not path.isfile(file_path):
+            return None
+        stat = os.stat(file_path)
+        return {
+            "filename": filename,
+            "size": stat.st_size,
+            "modified": stat.st_mtime,
+        }
+
+    def getSoundFilesList(self):
+        """Returns metadata for all sound files in the Sounds directory."""
+        sounds = []
+        for filename in self.listAllSoundFiles():
+            info = self.getSoundFileInfo(filename)
+            if info is not None:
+                sounds.append(info)
+        return sounds
+
+    def removeSoundFromCache(self, filename: str):
+        """Removes cached PyGame sound objects for a filename."""
+        filename = self.normalizeSoundFilename(filename)
+        if filename is None:
+            return
+        for soundName in [filename, self.SOUND_DIR + '/' + filename]:
+            if soundName in self.sounds:
+                self.sounds.pop(soundName)
     
     def deleteSoundFile(self, filename: str) -> bool:
         """Deletes the specified sound file from the Sounds directory."""
-        # Check filename and append 'Sounds/' if needed
-        if filename is None or not isinstance(filename, str) or filename == '':
+        filename = self.normalizeSoundFilename(filename)
+        file_path = self.getSoundFilePath(filename)
+        if file_path is None:
             print("Invalid filename provided", flush=True)
             return False
-        if not filename.startswith('Sounds/'):
-            filename = 'Sounds/' + filename
-        if not path.exists(filename):
-            print(f"Sound file '{filename}' does not exist", flush=True)
+        if not path.exists(file_path):
+            print(f"Sound file '{file_path}' does not exist", flush=True)
             # Task failed successfully
             return True
         # Try to remove file
         try:
-            os.remove(filename)
-            # Also remove from loaded sounds if present
-            soundName = filename.split('/')[-1]
-            if soundName in self.sounds:
-                self.sounds.pop(soundName)
+            os.remove(file_path)
+            self.removeSoundFromCache(filename)
             # Success
             return True
         except Exception as e:
             # Failed
-            print(f"Error deleting sound file '{filename}': {e}", flush=True)
+            print(f"Error deleting sound file '{file_path}': {e}", flush=True)
+            return False
+
+    def renameSoundFile(self, filename: str, newFilename: str) -> bool:
+        """Renames the specified sound file inside the Sounds directory."""
+        filename = self.normalizeSoundFilename(filename)
+        newFilename = self.normalizeSoundFilename(newFilename)
+        old_path = self.getSoundFilePath(filename)
+        new_path = self.getSoundFilePath(newFilename)
+        if old_path is None or new_path is None:
+            print("Invalid sound filename provided", flush=True)
+            return False
+        if not path.exists(old_path) or not path.isfile(old_path):
+            print(f"Sound file '{old_path}' does not exist", flush=True)
+            return False
+        if path.exists(new_path):
+            print(f"Sound file '{new_path}' already exists", flush=True)
+            return False
+        try:
+            os.rename(old_path, new_path)
+            self.removeSoundFromCache(filename)
+            self.removeSoundFromCache(newFilename)
+            return True
+        except Exception as e:
+            print(f"Error renaming sound file '{old_path}': {e}", flush=True)
+            return False
+
+    def saveSoundFile(self, file, filename: str = None) -> bool:
+        """Saves an uploaded sound file into the Sounds directory."""
+        if file is None:
+            print("No sound file provided", flush=True)
+            return False
+        if filename is None or filename == '':
+            filename = file.filename
+        if isinstance(filename, str):
+            filename = path.basename(filename.replace('\\', '/')).strip()
+        filename = self.normalizeSoundFilename(filename)
+        file_path = self.getSoundFilePath(filename)
+        if file_path is None:
+            print("Invalid upload filename provided", flush=True)
+            return False
+        if path.exists(file_path):
+            print(f"Sound file '{file_path}' already exists", flush=True)
+            return False
+        try:
+            os.makedirs(self.getSoundsDirectory(), exist_ok=True)
+            file.save(file_path)
+            self.removeSoundFromCache(filename)
+            return True
+        except Exception as e:
+            print(f"Error saving sound file '{file_path}': {e}", flush=True)
             return False
