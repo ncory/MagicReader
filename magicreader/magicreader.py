@@ -72,6 +72,12 @@ class MagicBand():
         self.read_delay_timer = None
         self.read_once_enabled = False
         self.read_once_result = None
+        self.sequence_thread = None
+        self.sequence_cancel_event = None
+        self.sequence_lock = threading.Lock()
+        self.active_sequence = None
+        self.active_sequence_id = None
+        self.pending_rfid_after_sequence_cancel = None
         # Create http object to use later
         #self.http_obj = Http()
         # Create queue
@@ -134,6 +140,7 @@ class MagicBand():
         # Clear active flags
         self.is_active = False
         self.allowRead = False
+        self.cancelActiveSequence()
         # Stop RIFD reader
         self.reader.stop()
         # Stop REST queue
@@ -259,6 +266,19 @@ class MagicBand():
                     self.read_once_enabled = False
                     self.read_once_result = event.data
                     continue
+                active_sequence = self.getActiveSequence()
+                if active_sequence is not None:
+                    if active_sequence.cancel_allowed:
+                        print("RFID tap received - cancelling active sequence", flush=True)
+                        if self.pending_rfid_after_sequence_cancel is None:
+                            self.pending_rfid_after_sequence_cancel = event.data
+                        else:
+                            print("RFID tap ignored - sequence cancellation already pending", flush=True)
+                        self.allowRead = False
+                        self.cancelActiveSequence()
+                    else:
+                        print("RFID tap ignored - active sequence cannot be cancelled", flush=True)
+                    continue
                 # Are we looking for an ID?
                 if self.allowRead:
                     id = event.data.id
@@ -269,6 +289,9 @@ class MagicBand():
                     self.onReadMagicBand(id, event.data.isDisney)
             elif event.type == AppEventType.EnterWaitMode:
                 # ENTER WAIT MODE
+                if self.isSequenceActive():
+                    self.cancelActiveSequence()
+                    continue
                 # Allow reads
                 self.allowRead = True
                 # Set state
@@ -277,18 +300,24 @@ class MagicBand():
                 self.triggerWaiting()
             elif event.type == AppEventType.PlaySequence:
                 # PLAY SEQUENCE
-                self.playSequence(event.data)
+                if not self.playSequence(event.data):
+                    self.onError("Failed to start sequence")
             elif event.type == AppEventType.StopSequence:
                 # STOP SEQUENCE
-                # Stop music
-                self.stopMusic()
+                sequence_was_active = self.cancelActiveSequence()
                 # Stop timers
                 self.stopReadDelayTimer()
                 self.stopWaitModeTimer()
-                # Push event for wait mode
-                self.event_queue.put((1, AppEvent(AppEventType.EnterWaitMode)))
+                if not sequence_was_active:
+                    # Stop any current sounds and return to wait mode.
+                    self.soundManager.stopAllSounds()
+                    self.event_queue.put((1, AppEvent(AppEventType.EnterWaitMode)))
+            elif event.type == AppEventType.SequenceFinished:
+                # SEQUENCE FINISHED
+                self.sequenceFinished(event.data)
             elif event.type == AppEventType.Blackout:
                 # BLACKOUT
+                self.cancelActiveSequence()
                 # Cancel reads?
                 if isinstance(event.data, bool) and event.data is True:
                     self.allowRead = False
@@ -298,6 +327,7 @@ class MagicBand():
                 self.triggerBlackout()
             elif event.type == AppEventType.Shutdown:
                 # SHUTDOWN
+                self.cancelActiveSequence()
                 # Run cleanup routine
                 self.cleanup()
                 # End this thread
@@ -542,26 +572,106 @@ class MagicBand():
 
     ######### Sequence functions #########
 
+    def isSequenceActive(self):
+        with self.sequence_lock:
+            return self.active_sequence is not None
+
+    def getActiveSequence(self):
+        with self.sequence_lock:
+            return self.active_sequence
+
+    def getActiveSequenceId(self):
+        with self.sequence_lock:
+            return self.active_sequence_id
+
+    def cancelActiveSequence(self):
+        with self.sequence_lock:
+            cancel_event = self.sequence_cancel_event
+            sequence_id = self.active_sequence_id
+            if self.active_sequence is None or cancel_event is None:
+                return False
+        print(f"Cancelling sequence: {sequence_id}", flush=True)
+        cancel_event.set()
+        self.soundManager.stopAllSounds()
+        return True
+
     def playSequence(self, id: str):
-        """Play the selected sequence"""
+        """Starts playback for the selected sequence in a background thread."""
         # Get sequence from sequence manager
         sequence = self.sequence_manager.getSequenceById(id)
         if sequence is None or not isinstance(sequence, Sequence):
             print("Invalid sequence", flush=True)
             return False
-        # Disable further reads
-        self.allowRead = False
+        with self.sequence_lock:
+            if self.active_sequence is not None:
+                print("Cannot start sequence - another sequence is already active", flush=True)
+                return False
+            cancel_event = threading.Event()
+            thread = threading.Thread(
+                target=self.runSequence,
+                args=(id, sequence, cancel_event),
+                daemon=True
+            )
+            self.active_sequence = sequence
+            self.active_sequence_id = id
+            self.sequence_cancel_event = cancel_event
+            self.sequence_thread = thread
+        # Allow RFID reads during cancellable sequences so taps can cancel playback.
+        self.allowRead = sequence.cancel_allowed
         # Stop all music
         self.soundManager.stopMusic()
         # Set status
         self.setState(State.PlayingSequence, sequence.name)
-        # Actually play the sequence
-        if not sequence.play(self.wledManager, self.soundManager):
-            print("Failed to play sequence", flush=True)
-            return False
-        # Done playing sequence - setup next read
-        self.startWaitModeTimer(0)
+        # Actually play the sequence in the worker thread.
+        thread.start()
         return True
+
+    def runSequence(self, id: str, sequence: Sequence, cancel_event: threading.Event):
+        success = False
+        try:
+            success = sequence.play(self.wledManager, self.soundManager, cancel_event)
+        except Exception as e:
+            print(f"Error playing sequence {id}: {e}", flush=True)
+            success = False
+        cancelled = cancel_event.is_set()
+        self.event_queue.put((1, AppEvent(AppEventType.SequenceFinished, {
+            "id": id,
+            "success": success,
+            "cancelled": cancelled
+        })))
+
+    def sequenceFinished(self, result: dict):
+        if not isinstance(result, dict):
+            result = {}
+        sequence_id = result.get("id", None)
+        success = result.get("success", False)
+        cancelled = result.get("cancelled", False)
+        should_return_to_wait = self.state == State.PlayingSequence
+        with self.sequence_lock:
+            if self.active_sequence_id is not None and sequence_id != self.active_sequence_id:
+                print(f"Ignoring stale sequence completion for: {sequence_id}", flush=True)
+                return
+            self.active_sequence = None
+            self.active_sequence_id = None
+            self.sequence_cancel_event = None
+            self.sequence_thread = None
+        pending_rfid = self.pending_rfid_after_sequence_cancel
+        self.pending_rfid_after_sequence_cancel = None
+        self.allowRead = False
+        if cancelled:
+            print(f"Sequence cancelled: {sequence_id}", flush=True)
+            if pending_rfid is not None and isinstance(pending_rfid, RfidRead):
+                print("Processing RFID tap after sequence cancellation", flush=True)
+                self.onReadMagicBand(pending_rfid.id, pending_rfid.isDisney)
+                return
+        elif not success:
+            print(f"Sequence failed: {sequence_id}", flush=True)
+            self.onError("Failed to playback sequence")
+            return
+        else:
+            print(f"Sequence finished: {sequence_id}", flush=True)
+        if should_return_to_wait:
+            self.startWaitModeTimer(0)
 
 
     ######### Action functions #########

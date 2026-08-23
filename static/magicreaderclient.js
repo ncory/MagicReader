@@ -216,6 +216,12 @@ function displayStatus() {
         // Fetch allwo read button
         let allowReadButton = $("#button-allowRead");
         allowReadButton.off('click')
+        let stopSequenceButton = $("#button-stopSequence");
+        stopSequenceButton.off('click')
+        if (stopSequenceButton.length) {
+            stopSequenceButton.prop('disabled', !statusCache.sequenceActive);
+            stopSequenceButton.on('click', controlStopSequence)
+        }
         // Read allowed?
         if (statusCache.allowRead) {
             allowReadDiv.text("RFID Read Allowed");

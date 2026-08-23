@@ -54,7 +54,9 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
             "state": magicreader.state.value,
             "status": magicreader.status,
             "isError": magicreader.isError,
-            "allowRead": magicreader.allowRead
+            "allowRead": magicreader.allowRead,
+            "sequenceActive": magicreader.isSequenceActive(),
+            "activeSequenceId": magicreader.getActiveSequenceId()
         }
         return {"result": "ok", "status": statusDict}
     

@@ -210,11 +210,18 @@ class SequenceAction:
         action.delay = delay
         return action
 
-    def performAction(self, wled: WLEDManager, soundManager: SoundManager):
+    def performAction(self, wled: WLEDManager, soundManager: SoundManager, cancel_event = None):
         """Performs the action based on its type."""
         # Check for delay
         if self.delay > 0:
-            time.sleep(self.delay)
+            if cancel_event is not None:
+                if cancel_event.wait(self.delay):
+                    print("Sequence action cancelled during delay", flush=True)
+                    return False
+            else:
+                time.sleep(self.delay)
+        if cancel_event is not None and cancel_event.is_set():
+            return False
         # Which action type?
         if self.type == ActionType.WLEDInternal:
             return self.performWLEDInternalAction(wled)

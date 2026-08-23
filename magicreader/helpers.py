@@ -20,6 +20,7 @@ class AppEventType(OrderedEnum):
     EnterWaitMode = "enterWaitMode"
     PlaySequence = "playSequence"
     StopSequence = "stopSequence"
+    SequenceFinished = "sequenceFinished"
     Blackout = "blackout"
     Shutdown = "shutdown"
 #    def __lt__(self, other):
