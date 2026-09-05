@@ -8,7 +8,6 @@ class State(Enum):
     Welcome = "welcome"
     WaitingForTap = "waitingForTap"
     Checking = "checking"
-    TapSuccess = "success"
     PlayingSequence = "playingSequence"
     Blackout = "blackout"
     Error = "error"

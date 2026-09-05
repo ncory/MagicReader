@@ -94,7 +94,6 @@ class MagicBand():
         # Pre-load sound files
         self.soundManager.preLoadSound("startup", settings['sound_startup'])
         self.soundManager.preLoadSound("waiting", settings['sound_waiting'])
-        self.soundManager.preLoadSound("success", settings['sound_success'])
         self.soundManager.preLoadSound("error", settings['sound_error'])
     
     def run(self):
@@ -448,13 +447,6 @@ class MagicBand():
             print("ERROR: found no sequnce to run!", flush=True)
             self.onError("Found no sequence to run!")
             return
-        '''
-        # Trigger success lights and sound
-        self.setState(State.TapSuccess)
-        self.triggerReadSuccess()
-        # Wait
-        time.sleep(settings['success_action_delay'])
-        '''
         # Run sequence
         if not self.playSequence(seq_id):
             # Error!
@@ -527,13 +519,6 @@ class MagicBand():
         self.soundManager.playSound("waiting")
         # Trigger LED sequence
         self.wledManager.callLedPreset(settings['wled_preset_waiting'])
-
-    def triggerReadSuccess(self):
-        """Triggers 'Success' LED sequence and sound. Called after successful ID lookup."""
-        # Play sound
-        self.soundManager.playSound("success")
-        # Trigger LED sequence
-        self.wledManager.callLedPreset(settings['wled_preset_success'])
         
     def triggerError(self):
         """Triggers 'Error' LED sequence and sound."""

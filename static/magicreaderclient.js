@@ -199,9 +199,6 @@ function displayStatus() {
             case "checking":
                 statusDiv.text("Read ID - Checking");
                 break;
-            case "success":
-                statusDiv.text("Read ID - Success!");
-                break;
             case "playingSequence":
                 // Do we have a sequence name?
                 if (statusCache.status != null && statusCache.status != '') {
