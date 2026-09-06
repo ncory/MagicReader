@@ -4,6 +4,7 @@ var sequenceNames = null;
 var sequences = null;
 var bands = null;
 var sounds = null;
+var settingsConfig = null;
 var statusCache = null;
 var editSequenceOriginalId = null;
 var renameSoundOriginalName = null;
@@ -88,6 +89,11 @@ function onLoadSequencesPage() {
 function onLoadSoundsPage() {
     displaySoundsTable();
     getSoundsList();
+}
+
+function onLoadSettingsPage() {
+    displaySettingsForm();
+    getSettingsConfig();
 }
 
 
@@ -807,6 +813,196 @@ function buttonDeleteSequenceAction(element) {
 function updateSequenceActionsSummary() {
     let count = $('#editSequenceActionsTable_body tr.sequence-action-row').length;
     $('#editSequenceActionsSummary').text(count + (count === 1 ? " action" : " actions"));
+}
+
+
+/////// Settings Functions ///////
+
+function getSettingsConfig() {
+    makeApiCall('/settings', 'GET',
+        function(response, textStatus, jqXHR) {
+            settingsConfig = getDataFromSuccessfulApiResponse(response);
+            displaySettingsForm();
+            $('#settingsSaveStatus').text('');
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR loading settings:" + errorThrown);
+            settingsConfig = null;
+            displaySettingsForm();
+            $('#settingsSaveStatus').text("Failed to load settings.");
+        });
+}
+
+function displaySettingsForm() {
+    let form = $('#settingsForm');
+    if (!form.length) return;
+    form.empty();
+    if (!isDict(settingsConfig) || !(settingsConfig.schema instanceof Array) || !isDict(settingsConfig.settings)) {
+        form.append($('<section class="p-3 mb-3 bg-light rounded-3 text-secondary">').text("Settings not loaded."));
+        return;
+    }
+
+    let sections = {};
+    settingsConfig.schema.forEach((field) => {
+        if (!isDict(field)) return;
+        let sectionName = getStringFromDict(field, 'section') || "Settings";
+        if (!(sectionName in sections)) {
+            sections[sectionName] = [];
+        }
+        sections[sectionName].push(field);
+    });
+
+    Object.keys(sections).forEach((sectionName) => {
+        let section = $('<section class="p-3 mb-3 bg-light rounded-3 settings-section">');
+        section.append($('<h4>').text(sectionName));
+        sections[sectionName].forEach((field) => {
+            section.append(createSettingsFieldRow(field));
+        });
+        form.append(section);
+    });
+}
+
+function createSettingsFieldRow(field) {
+    let key = getStringFromDict(field, 'key');
+    let label = getStringFromDict(field, 'label') || key;
+    let row = $('<div class="row mb-3 align-items-center settings-field-row">');
+    row.append($('<label class="col-sm-4 col-lg-3 col-form-label">').attr('for', 'setting-' + key).text(label));
+    let controlParent = $('<div class="col-sm-8 col-lg-6">');
+    controlParent.append(createSettingsControl(field));
+    row.append(controlParent);
+    if (field.restart_required === true) {
+        row.append($('<div class="col-sm-8 offset-sm-4 col-lg-3 offset-lg-0 text-secondary small">').text("Restart required"));
+    }
+    return row;
+}
+
+function createSettingsControl(field) {
+    let key = getStringFromDict(field, 'key');
+    let type = getStringFromDict(field, 'type') || "text";
+    let value = settingsConfig.settings.hasOwnProperty(key) ? settingsConfig.settings[key] : null;
+    if (type === "boolean") {
+        let wrapper = $('<div class="form-check form-switch">');
+        wrapper.append($('<input class="form-check-input settings-input" type="checkbox">')
+            .attr('id', 'setting-' + key)
+            .attr('data-key', key)
+            .attr('data-type', type)
+            .prop('checked', value === true));
+        return wrapper;
+    }
+    if (type === "select") {
+        let select = $('<select class="form-select settings-input">')
+            .attr('id', 'setting-' + key)
+            .attr('data-key', key)
+            .attr('data-type', type);
+        let options = field.options instanceof Array ? field.options : [];
+        options.forEach((option) => {
+            if (!isDict(option)) return;
+            let optionValue = option.value;
+            let optionLabel = getStringFromDict(option, 'label') || optionValue;
+            select.append($('<option>').attr('value', optionValue).text(optionLabel));
+        });
+        select.val(value);
+        return select;
+    }
+    if (type === "sound") {
+        let select = $('<select class="form-select settings-input">')
+            .attr('id', 'setting-' + key)
+            .attr('data-key', key)
+            .attr('data-type', type)
+            .attr('data-nullable', field.nullable === true ? 'true' : 'false');
+        if (field.nullable === true) {
+            select.append($('<option value="">None</option>'));
+        }
+        let soundNames = settingsConfig.sounds instanceof Array ? settingsConfig.sounds : [];
+        if (value != null && soundNames.indexOf(value) < 0) {
+            select.append($('<option>').attr('value', value).text(value + " (missing)"));
+        }
+        soundNames.forEach((filename) => {
+            select.append($('<option>').attr('value', filename).text(filename));
+        });
+        select.val(value == null ? '' : value);
+        return select;
+    }
+    if (type === "number") {
+        let input = $('<input type="number" class="form-control settings-input">')
+            .attr('id', 'setting-' + key)
+            .attr('data-key', key)
+            .attr('data-type', type)
+            .val(value == null ? '' : value);
+        if (field.hasOwnProperty('min')) {
+            input.attr('min', field.min);
+        }
+        let unit = getStringFromDict(field, 'unit');
+        if (unit == null) return input;
+        return $('<div class="input-group">')
+            .append(input)
+            .append($('<span class="input-group-text settings-input-unit">').text(unit));
+    }
+    return $('<input type="text" class="form-control settings-input">')
+        .attr('id', 'setting-' + key)
+        .attr('data-key', key)
+        .attr('data-type', type)
+        .attr('data-nullable', field.nullable === true ? 'true' : 'false')
+        .val(value == null ? '' : value);
+}
+
+function collectSettingsPayload() {
+    let payload = {};
+    let valid = true;
+    $('.settings-input').each(function() {
+        let input = $(this);
+        let key = input.attr('data-key');
+        let type = input.attr('data-type');
+        let nullable = input.attr('data-nullable') === 'true';
+        if (type === "boolean") {
+            payload[key] = input.is(':checked');
+        } else if (type === "number") {
+            let value = parseInt(input.val(), 10);
+            if (!Number.isFinite(value)) {
+                alert("Please enter a valid number for " + key + ".");
+                valid = false;
+                return false;
+            }
+            payload[key] = value;
+        } else {
+            let value = input.val();
+            payload[key] = nullable && value === '' ? null : value;
+        }
+    });
+    return valid ? payload : null;
+}
+
+function buttonSaveSettings() {
+    let payload = collectSettingsPayload();
+    if (payload == null) return;
+    setSaveSettingsButtonEnabled(false);
+    $('#settingsSaveStatus').text("Saving...");
+    makeApiCall('/settings', 'PUT',
+        function(response, textStatus, jqXHR) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (isDict(data)) {
+                settingsConfig = data;
+                displaySettingsForm();
+                let message = "Settings saved.";
+                if (response.restartRequired === true) {
+                    message += " Restart required for RFID changes.";
+                }
+                $('#settingsSaveStatus').text(message);
+            } else {
+                $('#settingsSaveStatus').text("Failed to save settings.");
+            }
+            setSaveSettingsButtonEnabled(true);
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR saving settings:" + errorThrown);
+            $('#settingsSaveStatus').text("Failed to save settings. Error contacting server.");
+            setSaveSettingsButtonEnabled(true);
+        },
+        {settings: payload});
+}
+
+function setSaveSettingsButtonEnabled(enabled) {
+    $('#button-saveSettings').prop('disabled', !enabled);
 }
 
 

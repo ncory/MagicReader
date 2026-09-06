@@ -42,6 +42,113 @@ settings = config['settings']
 print_band_id = bool(settings['print_band_id'])
 #bands = config['bands']
 #sequences = config['sequences']
+SETTINGS_FILE = 'data/settings.json'
+SETTINGS_SCHEMA = [
+    {
+        "key": "rfid_mode",
+        "label": "RFID Reader",
+        "type": "select",
+        "section": "RFID",
+        "options": [
+            {"value": "mfrc522", "label": "MFRC522"},
+            {"value": "weigand-serial", "label": "Wiegand Serial"}
+        ],
+        "restart_required": True
+    },
+    {
+        "key": "rfid_port",
+        "label": "RFID Serial Port",
+        "type": "text",
+        "section": "RFID",
+        "nullable": True,
+        "restart_required": True
+    },
+    {
+        "key": "print_band_id",
+        "label": "Print Band IDs",
+        "type": "boolean",
+        "section": "RFID"
+    },
+    {
+        "key": "wled_address",
+        "label": "WLED Address",
+        "type": "text",
+        "section": "WLED"
+    },
+    {
+        "key": "wled_preset_black",
+        "label": "Blackout Preset",
+        "type": "number",
+        "section": "WLED",
+        "min": 0
+    },
+    {
+        "key": "wled_preset_startup",
+        "label": "Startup Preset",
+        "type": "number",
+        "section": "WLED",
+        "min": 0
+    },
+    {
+        "key": "wled_preset_waiting",
+        "label": "Waiting Preset",
+        "type": "number",
+        "section": "WLED",
+        "min": 0
+    },
+    {
+        "key": "wled_preset_error",
+        "label": "Error Preset",
+        "type": "number",
+        "section": "WLED",
+        "min": 0
+    },
+    {
+        "key": "sound_startup",
+        "label": "Startup Sound",
+        "type": "sound",
+        "section": "Sounds",
+        "nullable": True
+    },
+    {
+        "key": "sound_waiting",
+        "label": "Waiting Sound",
+        "type": "sound",
+        "section": "Sounds",
+        "nullable": True
+    },
+    {
+        "key": "sound_error",
+        "label": "Error Sound",
+        "type": "sound",
+        "section": "Sounds",
+        "nullable": True
+    },
+    {
+        "key": "startup_read_delay",
+        "label": "Startup Read Delay",
+        "type": "number",
+        "section": "Timing",
+        "min": 0,
+        "unit": "seconds"
+    },
+    {
+        "key": "error_read_delay",
+        "label": "Error Read Delay",
+        "type": "number",
+        "section": "Timing",
+        "min": 0,
+        "unit": "seconds"
+    },
+    {
+        "key": "inactivity_timeout",
+        "label": "Inactivity Timeout",
+        "type": "number",
+        "section": "Timing",
+        "min": 0,
+        "unit": "seconds"
+    }
+]
 
 # Setup logging
 log = logging.getLogger('main')
@@ -92,9 +199,7 @@ class MagicBand():
         else:
             self.reader = None
         # Pre-load sound files
-        self.soundManager.preLoadSound("startup", settings['sound_startup'])
-        self.soundManager.preLoadSound("waiting", settings['sound_waiting'])
-        self.soundManager.preLoadSound("error", settings['sound_error'])
+        self.loadConfiguredSounds()
     
     def run(self):
         """Starts the application"""
@@ -166,6 +271,105 @@ class MagicBand():
         self.state = state
         self.status = message
         self.isError = isError
+
+
+    ######### Settings Functions #########
+
+    def getSettings(self):
+        return dict(settings)
+
+    def getSettingsSchema(self):
+        return SETTINGS_SCHEMA
+
+    def loadConfiguredSounds(self):
+        self.soundManager.preLoadSound("startup", settings.get('sound_startup'))
+        self.soundManager.preLoadSound("waiting", settings.get('sound_waiting'))
+        self.soundManager.preLoadSound("error", settings.get('sound_error'))
+
+    def coerceSettingValue(self, field: dict, value):
+        key = field.get("key")
+        field_type = field.get("type")
+        nullable = bool(field.get("nullable", False))
+        if value == '' and nullable:
+            return True, None
+        if value is None:
+            return (True, None) if nullable else (False, None)
+        if field_type == "boolean":
+            if isinstance(value, bool):
+                return True, value
+            return False, None
+        if field_type == "number":
+            if isinstance(value, bool):
+                return False, None
+            try:
+                number_value = int(value)
+            except Exception:
+                return False, None
+            if "min" in field and number_value < field["min"]:
+                return False, None
+            return True, number_value
+        if field_type == "select":
+            allowed_values = [option.get("value") for option in field.get("options", [])]
+            if value in allowed_values:
+                return True, value
+            return False, None
+        if field_type == "sound":
+            if not isinstance(value, str):
+                return False, None
+            value = self.soundManager.normalizeSoundFilename(value)
+            if value is None:
+                return (True, None) if nullable else (False, None)
+            if not self.soundManager.isValidSoundFilename(value):
+                return False, None
+            return True, value
+        if field_type == "text":
+            if not isinstance(value, str):
+                return False, None
+            value = value.strip()
+            if value == '':
+                return (True, None) if nullable else (False, None)
+            return True, value
+        print(f"Unknown setting type for {key}: {field_type}", flush=True)
+        return False, None
+
+    def updateSettings(self, request_settings: dict):
+        if request_settings is None or not isinstance(request_settings, dict):
+            return False, False
+        global settings, print_band_id
+        old_settings = dict(settings)
+        updated_settings = {}
+        restart_required = False
+        for field in SETTINGS_SCHEMA:
+            key = field.get("key")
+            if key in request_settings:
+                valid, value = self.coerceSettingValue(field, request_settings.get(key))
+                if not valid:
+                    print(f"Invalid setting value for {key}: {request_settings.get(key)}", flush=True)
+                    return False, False
+                updated_settings[key] = value
+            elif key in settings:
+                updated_settings[key] = settings[key]
+            if updated_settings.get(key) != old_settings.get(key) and field.get("restart_required") is True:
+                restart_required = True
+        for key, value in settings.items():
+            if key not in updated_settings:
+                updated_settings[key] = value
+        try:
+            with open(SETTINGS_FILE, 'w') as file:
+                json.dump({"settings": updated_settings}, file, indent=4)
+                file.write('\n')
+        except Exception as e:
+            print(f"ERROR saving settings: {e}", flush=True)
+            return False, False
+        settings.clear()
+        settings.update(updated_settings)
+        config['settings'] = settings
+        print_band_id = bool(settings.get('print_band_id'))
+        self.wledManager.address = settings.get('wled_address')
+        self.loadConfiguredSounds()
+        if self.is_active:
+            self.resetInactiveTimer()
+        return True, restart_required
 
 
     ######### Inactivity Timer #########
@@ -509,21 +713,24 @@ class MagicBand():
     def triggerStartup(self):
         """Triggers 'Startup' LED sequence and sound. Called when app first launches."""
         # Play sound
-        self.soundManager.playSound("startup")
+        if settings.get('sound_startup') is not None:
+            self.soundManager.playSound("startup")
         # Trigger LED sequence
         self.wledManager.callLedPreset(settings['wled_preset_startup'])
 
     def triggerWaiting(self):
         """Triggers 'Waiting' LED sequence and sound. Called when app enters read loop and is waiting for an RFID read."""
         # Play sound
-        self.soundManager.playSound("waiting")
+        if settings.get('sound_waiting') is not None:
+            self.soundManager.playSound("waiting")
         # Trigger LED sequence
         self.wledManager.callLedPreset(settings['wled_preset_waiting'])
         
     def triggerError(self):
         """Triggers 'Error' LED sequence and sound."""
         # Play sound
-        self.soundManager.playSound("error")
+        if settings.get('sound_error') is not None:
+            self.soundManager.playSound("error")
         # Trigger LED sequence
         self.wledManager.callLedPreset(settings['wled_preset_error'])
     

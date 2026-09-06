@@ -31,6 +31,9 @@ class SoundManager:
                 print(f"Error loading sound {sound}: {e}", flush=True)
     
     def preLoadSound(self, soundName: str, filename: str) -> bool:
+        if filename is None or not isinstance(filename, str) or filename == '':
+            self.clearSound(soundName)
+            return True
         # Load sound file
         sound = self.loadSound(filename)
         if sound is not None:
@@ -59,6 +62,11 @@ class SoundManager:
             print("Error loading sound", flush=True)
             print(e, flush=True)
             return None
+
+    def clearSound(self, soundName: str):
+        """Removes a named sound from the preloaded cache."""
+        if soundName in self.sounds:
+            self.sounds.pop(soundName)
 
 
 ######### Playback #########

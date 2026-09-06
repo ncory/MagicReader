@@ -127,6 +127,35 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
         #os.system("/home/pi/magicreader/MagicWand.sh")
         os.system("sudo systemctl start MagicWand.service")
         return {"result": "ok"}
+
+
+    ###### Settings ######
+
+    @app.route('/settings')
+    def get_settings():
+        return {
+            "result": "ok",
+            "data": {
+                "settings": magicreader.getSettings(),
+                "schema": magicreader.getSettingsSchema(),
+                "sounds": magicreader.soundManager.listAllSoundFiles()
+            }
+        }
+
+    @app.route('/settings', methods=['PUT'])
+    def put_settings():
+        try:
+            request_data = request.get_json()
+            if request_data is not None and isinstance(request_data, dict):
+                request_settings = request_data.get('settings', request_data)
+                success, restart_required = magicreader.updateSettings(request_settings)
+                if success:
+                    result = get_settings()
+                    result["restartRequired"] = restart_required
+                    return result
+        except Exception as e:
+            print(f"ERROR saving settings: {e}", flush=True)
+        return {"result": "error"}
     
 
     ###### Sequences ######

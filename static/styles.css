@@ -61,6 +61,27 @@ body {
     margin-bottom: 5px;
 }
 
+.settings-section {
+    max-width: 960px;
+}
+
+.settings-field-row {
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.75rem;
+}
+
+.settings-field-row:last-child {
+    border-bottom: 0;
+    margin-bottom: 0 !important;
+    padding-bottom: 0;
+}
+
+.settings-save-status {
+    display: inline-block;
+    margin-left: 0.5rem;
+    color: #6c757d;
+}
+
 .sound-file-name {
     min-width: 180px;
     overflow-wrap: anywhere;
