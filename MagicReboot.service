@@ -1,15 +1,12 @@
 [Unit]
-Description=MagicWand
-Wants=NetworkManager-wait-online.service
-After=NetworkManager-wait-online.service
-#After=multi-user.target
+Description=Reboot MagicReader Pi
+After=MagicReader.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=false
-User=pi
-#WorkingDirectory=/home/pi/magicreader
-ExecStart=/home/pi/magicreader/MagicReboot.sh
+ExecStartPre=/usr/bin/systemctl stop MagicReader.service
+ExecStart=/usr/bin/systemctl reboot
 
 [Install]
-#WantedBy=multi-user.target
+# Started on demand by the web UI.

@@ -1,18 +1,19 @@
 [Unit]
 Description=MagicReader
-Wants=NetworkManager-wait-online.service
-After=NetworkManager-wait-online.service
-#After=multi-user.target
+Wants=network-online.target
+Wants=systemd-udev-settle.service
+After=network-online.target systemd-udev-settle.service sound.target
 
 [Service]
 Type=simple
 User=pi
-Environment="XDG_RUNTIME_DIR=/run/user/1000"
+SupplementaryGroups=spi gpio audio
 WorkingDirectory=/home/pi/magicreader
-#ExecStartPre=/usr/bin/sleep 10
-ExecStart=/usr/bin/env /home/pi/magicreader/.venv/bin/python /home/pi/magicreader/magicreader/__main__.py
-Restart=on-abort
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/pi/magicreader/.venv/bin/python /home/pi/magicreader/magicreader/__main__.py
+Restart=on-failure
+RestartSec=5
 
 [Install]
-#WantedBy=multi-user.target
-#WantedBy=
+WantedBy=multi-user.target

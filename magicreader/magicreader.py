@@ -4,10 +4,7 @@ import logging
 #import struct
 import time
 import json
-#import os.path
-from os import path
 import sys
-import os
 from json import dumps
 #from httplib2 import Http
 #from mfrc522 import SimpleMFRC522
@@ -23,7 +20,6 @@ from sequenceManager import SequenceManager
 from soundManager import SoundManager
 from rfid import RfidRead#, RfidReader
 from rfid_mfrc522 import RfidMfrc522
-from rfid_weigand import RfidWeigand
 from sequence import Sequence
 from wled import WLEDManager
 from rest import RestQueue
@@ -45,25 +41,6 @@ print_band_id = bool(settings['print_band_id'])
 #sequences = config['sequences']
 SETTINGS_FILE = 'data/settings.json'
 SETTINGS_SCHEMA = [
-    {
-        "key": "rfid_mode",
-        "label": "RFID Reader",
-        "type": "select",
-        "section": "RFID",
-        "options": [
-            {"value": "mfrc522", "label": "MFRC522"},
-            {"value": "weigand-serial", "label": "Wiegand Serial"}
-        ],
-        "restart_required": True
-    },
-    {
-        "key": "rfid_port",
-        "label": "RFID Serial Port",
-        "type": "text",
-        "section": "RFID",
-        "nullable": True,
-        "restart_required": True
-    },
     {
         "key": "print_band_id",
         "label": "Print Band IDs",
@@ -199,9 +176,7 @@ class MagicBand():
         self.event_thread = None
         # Create RFID reader and fix logging level
         print("Creating RFID reader object", flush=True)
-        if (settings['rfid_mode'] == 'weigand-serial'):
-            self.reader = RfidWeigand(self, settings.get('rfid_port'))
-        elif (settings['rfid_mode'] == 'mfrc522'):
+        if RfidMfrc522.waitForMfrc522Hardware():
             self.reader = RfidMfrc522(self)
         else:
             self.reader = None
@@ -253,6 +228,8 @@ class MagicBand():
         self.is_active = False
         self.allowRead = False
         self.cancelActiveSequence()
+        # Reset configured GPIO outputs before the RFID library clears GPIO state.
+        self.gpioManager.cleanup()
         # Stop RIFD reader
         self.reader.stop()
         # Stop REST queue
@@ -261,8 +238,6 @@ class MagicBand():
         self.wledManager.callLedPreset(settings['wled_preset_black'])
         # Stop all sound
         self.soundManager.stopAllSounds()
-        # Reset configured GPIO outputs
-        self.gpioManager.cleanup()
         # Cleanup GPIO
         GPIO.cleanup()
 

@@ -1,32 +1,30 @@
 #!/bin/bash
-# This script installs MagicReader.service and MagicWand.service, enables tehm, and starts the MagicWand
+set -euo pipefail
 
-# Copy service files to systemd directory
-sudo cp MagicReader.service /lib/systemd/system/MagicReader.service
-sudo cp MagicWand.service /lib/systemd/system/MagicWand.service
-sudo cp MagicBoot.service /lib/systemd/system/MagicBoot.service
-sudo cp MagicReboot.service /lib/systemd/system/MagicReboot.service
+SERVICE_DIR="/etc/systemd/system"
+START_SERVICE="true"
 
-# Set ownership for the service files
-sudo chown root:root /lib/systemd/system/MagicReader.service
-sudo chown root:root /lib/systemd/system/MagicWand.service
-sudo chown root:root /lib/systemd/system/MagicBoot.service
-sudo chown root:root /lib/systemd/system/MagicReboot.service
+if [ "${1:-}" = "--no-start" ]; then
+    START_SERVICE="false"
+fi
 
-# Set permissions for the service files
-sudo chmod 644 /lib/systemd/system/MagicReader.service
-sudo chmod 644 /lib/systemd/system/MagicWand.service
-sudo chmod 644 /lib/systemd/system/MagicBoot.service
-sudo chmod 644 /lib/systemd/system/MagicReboot.service
+# Install local service units.
+sudo install -m 0644 MagicReader.service "$SERVICE_DIR/MagicReader.service"
+sudo install -m 0644 MagicWand.service "$SERVICE_DIR/MagicWand.service"
+sudo install -m 0644 MagicReboot.service "$SERVICE_DIR/MagicReboot.service"
 
-# Reload systemd to recognize the new services
+# Keep the legacy helper installed for manual testing, but do not enable it.
+sudo install -m 0644 MagicBoot.service "$SERVICE_DIR/MagicBoot.service"
+
+# Reload systemd to recognize the services.
 sudo systemctl daemon-reload
 
-# Enable services
+# MagicReader runs at boot. Helper services are started on demand.
 sudo systemctl enable MagicReader.service
-sudo systemctl enable MagicWand.service
-sudo systemctl enable MagicBoot.service
-sudo systemctl enable MagicReboot.service
+sudo systemctl disable MagicBoot.service || true
+sudo systemctl disable MagicWand.service || true
+sudo systemctl disable MagicReboot.service || true
 
-# Start MagicWand service
-sudo systemctl start MagicWand.service
+if [ "$START_SERVICE" = "true" ]; then
+    sudo systemctl restart MagicReader.service
+fi

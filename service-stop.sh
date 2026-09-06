@@ -1,14 +1,16 @@
 #!/bin/bash
+set -euo pipefail
+
 # This script stops MagicReader.service and disables the service
 
 # Stop services
-sudo systemctl stop MagicReader.service
-sudo systemctl stop MagicWand.service
-sudo systemctl stop MagicBoot.service
-sudo systemctl stop MagicReboot.service
+sudo systemctl stop MagicReader.service || true
+sudo systemctl stop MagicWand.service || true
+sudo systemctl stop MagicBoot.service || true
+sudo systemctl stop MagicReboot.service || true
 
 # Disable services
-sudo systemctl disable MagicReader.service
-sudo systemctl disable MagicWand.service
-sudo systemctl disable MagicBoot.service
-sudo systemctl disable MagicReboot.service
+sudo systemctl disable MagicReader.service || true
+sudo systemctl disable MagicWand.service || true
+sudo systemctl disable MagicBoot.service || true
+sudo systemctl disable MagicReboot.service || true

@@ -1,15 +1,5 @@
 #!/bin/bash
-# This script runs the MagicReader.service at boot, with a delay
-echo "This is the Magic Boot"
+set -euo pipefail
 
-# Start it the first time
-sudo systemctl start MagicReader.service
-
-# Wait
-sleep 12
-
-# Stop it
-sudo systemctl stop MagicReader.service
-
-# Start a second time
+echo "MagicBoot is deprecated; starting MagicReader.service directly."
 sudo systemctl start MagicReader.service

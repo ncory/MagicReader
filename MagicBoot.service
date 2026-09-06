@@ -1,15 +1,12 @@
 [Unit]
-Description=MagicWand
-Wants=NetworkManager-wait-online.service
-After=NetworkManager-wait-online.service
-#After=multi-user.target
+Description=Legacy MagicReader boot helper
+After=MagicReader.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=false
 User=pi
-#WorkingDirectory=/home/pi/magicreader
-ExecStart=nohup /home/pi/magicreader/MagicBoot.sh &
+ExecStart=/home/pi/magicreader/MagicBoot.sh
 
 [Install]
-WantedBy=multi-user.target
+# MagicReader.service starts at boot directly.
