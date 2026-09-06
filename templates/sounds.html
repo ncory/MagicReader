@@ -50,7 +50,7 @@
         </section>
 
         <section class="p-3 mb-3 bg-light rounded-3">
-            <div class="row g-2 align-items-end">
+            <div class="row g-3 align-items-end">
                 <div class="col-12 col-lg">
                     <label for="newSoundFile" class="form-label">Upload Sound</label>
                     <input type="file" class="form-control" id="newSoundFile" accept=".aac,.flac,.m4a,.mp3,.ogg,.wav,audio/*">
@@ -63,6 +63,17 @@
                 </div>
                 <div class="col-12 col-sm-auto">
                     <button type="button" class="btn btn-secondary w-100" onclick="getSoundsList();">Refresh</button>
+                </div>
+                <div class="col-12 col-lg-4 sound-disk">
+                    <div class="d-flex justify-content-between gap-2">
+                        <div class="fw-semibold">Storage</div>
+                        <div class="text-secondary" id="soundsDiskSummary">Loading...</div>
+                    </div>
+                    <div class="progress sound-disk-progress" role="progressbar" aria-label="Disk usage" aria-valuemin="0" aria-valuemax="100">
+                        <div class="progress-bar" id="soundsDiskProgress" style="width: 0%"></div>
+                    </div>
+                    <div class="small text-secondary" id="soundsDiskDetail"></div>
+                    <div class="small text-secondary sound-disk-path" id="soundsDiskPath"></div>
                 </div>
             </div>
             <div class="text-secondary mt-2" id="soundsUploadStatus"></div>

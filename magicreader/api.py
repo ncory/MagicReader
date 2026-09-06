@@ -220,9 +220,13 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
     @app.route('/sounds')
     def get_sounds():
         sounds = magicreader.soundManager.getSoundFilesList()
+        disk = magicreader.soundManager.getSoundDiskUsage()
         return {
             "result": "ok",
-            "data": sounds
+            "data": {
+                "sounds": sounds,
+                "disk": disk
+            }
         }
 
     @app.route('/sounds', methods=['POST'])

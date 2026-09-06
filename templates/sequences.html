@@ -76,7 +76,7 @@
         </section>
 
         <div class="modal fade" id="editSequenceModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
+            <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h1 class="modal-title fs-5" id="editSequenceModalTitle">Edit Sequence</h1>
@@ -111,15 +111,15 @@
                                 <button type="button" class="btn btn-sm btn-success" onclick="buttonAddSequenceAction();">Add Action</button>
                             </div>
                             <div class="table-responsive">
-                                <table class="table table-sm align-middle mb-2">
+                                <table class="table table-sm align-middle mb-2 sequence-actions-table">
                                     <thead>
                                         <tr>
-                                            <th scope="col">Type</th>
-                                            <th scope="col">Delay</th>
-                                            <th scope="col">Target</th>
-                                            <th scope="col">Value</th>
-                                            <th scope="col">Port</th>
-                                            <th scope="col"></th>
+                                            <th scope="col" class="sequence-action-type-cell">Type</th>
+                                            <th scope="col" class="sequence-action-delay-cell">Delay</th>
+                                            <th scope="col" class="sequence-action-target-cell">Target</th>
+                                            <th scope="col" class="sequence-action-value-cell">Value</th>
+                                            <th scope="col" class="sequence-action-port-cell">Port</th>
+                                            <th scope="col" class="sequence-action-buttons-cell"></th>
                                         </tr>
                                     </thead>
                                     <tbody id="editSequenceActionsTable_body"></tbody>

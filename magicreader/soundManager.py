@@ -1,5 +1,6 @@
 import os
 from os import path
+import shutil
 # Import PyGame for sound playback and hide prompts
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
@@ -212,6 +213,20 @@ class SoundManager:
             if info is not None:
                 sounds.append(info)
         return sounds
+
+    def getSoundDiskUsage(self):
+        """Returns disk usage for the filesystem that stores sound files."""
+        sound_dir = self.getSoundsDirectory()
+        usage_path = sound_dir if path.exists(sound_dir) else path.abspath('.')
+        usage = shutil.disk_usage(usage_path)
+        used = usage.total - usage.free
+        return {
+            "path": sound_dir,
+            "total": usage.total,
+            "used": used,
+            "free": usage.free,
+            "percent_used": round((used / usage.total) * 100, 1) if usage.total > 0 else 0
+        }
 
     def removeSoundFromCache(self, filename: str):
         """Removes cached PyGame sound objects for a filename."""

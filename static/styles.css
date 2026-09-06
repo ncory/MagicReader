@@ -61,6 +61,61 @@ body {
     margin-bottom: 5px;
 }
 
+.band-sequence-list {
+    min-height: 13rem;
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.band-sequence-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.band-sequence-item-text {
+    min-width: 0;
+}
+
+.band-sequence-name {
+    overflow-wrap: anywhere;
+}
+
+.sequence-actions-table .form-control,
+.sequence-actions-table .form-select {
+    min-width: 0;
+}
+
+.sequence-action-type-cell {
+    min-width: 12.5rem;
+    width: 12.5rem;
+}
+
+.sequence-action-delay-cell,
+.sequence-action-port-cell {
+    min-width: 5.75rem;
+    width: 5.75rem;
+}
+
+.sequence-action-delay,
+.sequence-action-port {
+    text-align: right;
+}
+
+.sequence-action-target-cell {
+    min-width: 10rem;
+}
+
+.sequence-action-value-cell {
+    min-width: 12rem;
+}
+
+.sequence-action-buttons-cell {
+    min-width: 11.5rem;
+    white-space: nowrap;
+}
+
 .settings-section {
     max-width: 960px;
 }
@@ -97,6 +152,19 @@ body {
 
 .sound-file-name {
     min-width: 180px;
+    overflow-wrap: anywhere;
+}
+
+.sound-disk {
+    min-width: 260px;
+}
+
+.sound-disk-progress {
+    height: 0.65rem;
+    margin: 0.35rem 0;
+}
+
+.sound-disk-path {
     overflow-wrap: anywhere;
 }
 

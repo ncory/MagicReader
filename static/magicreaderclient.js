@@ -4,6 +4,7 @@ var sequenceNames = null;
 var sequences = null;
 var bands = null;
 var sounds = null;
+var soundDisk = null;
 var settingsConfig = null;
 var statusCache = null;
 var editSequenceOriginalId = null;
@@ -74,9 +75,8 @@ function onLoadBandsPage() {
     displayBands();
     // Refresh bands
     getKnownBandsList();
-    // Update sequences in selects
-    updateSequencesInSelect($('#newBandSequence'));
-    updateSequencesInSelect($('#editBandSequence'));
+    // Update sequence pickers
+    refreshBandSequencePickers();
 }
 
 function onLoadSequencesPage() {
@@ -88,6 +88,7 @@ function onLoadSequencesPage() {
 }
 
 function onLoadSoundsPage() {
+    displaySoundDiskUsage();
     displaySoundsTable();
     getSoundsList();
 }
@@ -279,9 +280,8 @@ function getSequenceList() {
             // Display sequence buttons
             displaySequences();
             displayBands();
-            // Update in selects
-            updateSequencesInSelect($('#newBandSequence'));
-            updateSequencesInSelect($('#editBandSequence'));
+            // Update sequence pickers
+            refreshBandSequencePickers();
         },
         function(jqXHR, textStatus, errorThrown) {
             // ERROR
@@ -290,9 +290,8 @@ function getSequenceList() {
             // Display sequence buttons
             displaySequences();
             displayBands();
-            // Update in selects
-            updateSequencesInSelect($('#newBandSequence'));
-            updateSequencesInSelect($('#editBandSequence'));
+            // Update sequence pickers
+            refreshBandSequencePickers();
         });
 }
 
@@ -338,6 +337,7 @@ function addSequenceButton(div, id, name) {
 }
 
 function updateSequencesInSelect(sequencesSelect) {
+    if (!sequencesSelect.length || !sequencesSelect.is('select')) return;
     // Remove all existing sequence buttons
     sequencesSelect.empty();
     if (!sequencesSelect.prop('multiple')) {
@@ -384,6 +384,25 @@ function getSequenceName(id) {
         });
     }
     return foundName;
+}
+
+function getSequenceOptions() {
+    let found = [];
+    if (sequenceNames != null && sequenceNames instanceof Array) {
+        sequenceNames.forEach((seq) => {
+            if (isDict(seq)) {
+                let id = getStringFromDict(seq, 'id');
+                let seqName = getStringFromDict(seq, 'name');
+                if (id !== null) {
+                    found.push({
+                        id: id,
+                        name: seqName || id
+                    });
+                }
+            }
+        });
+    }
+    return found;
 }
 
 
@@ -612,11 +631,11 @@ function addSequenceActionRow(action) {
     let type = getStringFromDict(action, 'type') || "url";
     let tr = $('<tr class="sequence-action-row">');
     tr.append($('<td class="sequence-action-type-cell">').append(createActionTypeSelect(type)));
-    tr.append($('<td>').append($('<input type="number" min="0" class="form-control form-control-sm action-delay">').val(getNumberFromDict(action, 'delay') || 0)));
-    tr.append($('<td>').append($('<input type="text" class="form-control form-control-sm action-target">').val(getActionTarget(action))));
-    tr.append($('<td>').append(createActionValueControl(action)));
-    tr.append($('<td>').append($('<input type="number" min="0" class="form-control form-control-sm action-port">').val(getNumberFromDict(action, 'port'))));
-    tr.append($('<td>').append(createActionRowButtons()));
+    tr.append($('<td class="sequence-action-delay-cell">').append($('<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" class="form-control form-control-sm action-delay">').val(getNumberFromDict(action, 'delay') || 0)));
+    tr.append($('<td class="sequence-action-target-cell">').append($('<input type="text" class="form-control form-control-sm action-target">').val(getActionTarget(action))));
+    tr.append($('<td class="sequence-action-value-cell">').append(createActionValueControl(action)));
+    tr.append($('<td class="sequence-action-port-cell">').append($('<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" class="form-control form-control-sm action-port">').val(getNumberFromDict(action, 'port'))));
+    tr.append($('<td class="sequence-action-buttons-cell">').append(createActionRowButtons()));
     $('#editSequenceActionsTable_body').append(tr);
     updateActionRowForType(tr);
     updateSequenceActionsSummary();
@@ -627,9 +646,9 @@ function createActionTypeSelect(type) {
     [
         ["delay", "Delay"],
         ["url", "URL"],
-        ["wledInternal", "WLED Internal"],
-        ["wledExternal", "WLED External"],
-        ["soundFile", "Sound File"],
+        ["wledInternal", "Reader WLED"],
+        ["wledExternal", "External WLED"],
+        ["soundFile", "Sound Effect"],
         ["musicFile", "Music File"],
         ["gpioClosure", "GPIO Closure"],
         ["brightsign", "BrightSign"],
@@ -1187,14 +1206,33 @@ function refreshSequenceGpioOutputSelects() {
 function getSoundsList() {
     makeApiCall('/sounds', 'GET',
         function(response, textStatus, jqXHR) {
-            sounds = getDataFromSuccessfulApiResponse(response);
+            updateSoundsData(getDataFromSuccessfulApiResponse(response));
             displaySoundsTable();
+            displaySoundDiskUsage();
         },
         function(jqXHR, textStatus, errorThrown) {
             console.debug("ERROR loading sounds:" + errorThrown);
             sounds = null;
+            soundDisk = null;
             displaySoundsTable();
+            displaySoundDiskUsage();
         });
+}
+
+function updateSoundsData(data) {
+    if (data instanceof Array) {
+        sounds = data;
+        soundDisk = null;
+        return;
+    }
+    if (isDict(data)) {
+        let soundList = data.sounds;
+        sounds = soundList instanceof Array ? soundList : [];
+        soundDisk = isDict(data.disk) ? data.disk : null;
+        return;
+    }
+    sounds = null;
+    soundDisk = null;
 }
 
 function displaySoundsTable() {
@@ -1220,6 +1258,42 @@ function displaySoundsTable() {
         soundsCount.text("");
         soundsTableBody.append($('<tr>').append($('<td colspan="5" class="text-secondary">').text("No sound files loaded.")));
     }
+}
+
+function displaySoundDiskUsage() {
+    let summary = $('#soundsDiskSummary');
+    let detail = $('#soundsDiskDetail');
+    let progress = $('#soundsDiskProgress');
+    let path = $('#soundsDiskPath');
+    if (!summary.length) return;
+    if (!isDict(soundDisk)) {
+        summary.text("Disk space unavailable");
+        detail.text("");
+        progress.css('width', '0%').attr('aria-valuenow', 0).removeClass('bg-warning bg-danger');
+        path.text("");
+        return;
+    }
+    let free = getNumberFromDict(soundDisk, 'free');
+    let total = getNumberFromDict(soundDisk, 'total');
+    let used = getNumberFromDict(soundDisk, 'used');
+    let percentUsed = getNumberFromDict(soundDisk, 'percent_used');
+    let diskPath = getStringFromDict(soundDisk, 'path');
+    if (free == null || total == null || used == null || percentUsed == null) {
+        summary.text("Disk space unavailable");
+        detail.text("");
+        progress.css('width', '0%').attr('aria-valuenow', 0).removeClass('bg-warning bg-danger');
+        path.text("");
+        return;
+    }
+    let percentRounded = Math.max(0, Math.min(100, percentUsed));
+    summary.text(formatFileSize(free) + " available");
+    detail.text(formatFileSize(used) + " used of " + formatFileSize(total) + " (" + percentRounded.toFixed(1) + "%)");
+    progress
+        .css('width', percentRounded + '%')
+        .attr('aria-valuenow', percentRounded)
+        .toggleClass('bg-warning', percentRounded >= 80 && percentRounded < 90)
+        .toggleClass('bg-danger', percentRounded >= 90);
+    path.text(diskPath || "");
 }
 
 function addSoundToTable(soundsTableBody, sound) {
@@ -1288,11 +1362,12 @@ function buttonUploadSound() {
     makeUploadApiCall('/sounds', formData,
         function(response, textStatus, jqXHR) {
             let data = getDataFromSuccessfulApiResponse(response);
-            if (data != null && data instanceof Array) {
-                sounds = data;
+            if (data != null) {
+                updateSoundsData(data);
                 input.value = '';
                 $('#soundsUploadStatus').text("Upload complete.");
                 displaySoundsTable();
+                displaySoundDiskUsage();
             } else {
                 $('#soundsUploadStatus').text("Upload failed. Check the filename and extension.");
             }
@@ -1329,9 +1404,10 @@ function buttonRenameSoundSave() {
     makeApiCall('/sound/' + encodeURIComponent(renameSoundOriginalName), 'PUT',
         function(response, textStatus, jqXHR) {
             let data = getDataFromSuccessfulApiResponse(response);
-            if (data != null && data instanceof Array) {
-                sounds = data;
+            if (data != null) {
+                updateSoundsData(data);
                 displaySoundsTable();
+                displaySoundDiskUsage();
                 $('#renameSoundModal').modal('hide');
             } else {
                 alert("Failed to rename sound. Check that the new name uses a supported audio extension and does not already exist.");
@@ -1352,9 +1428,10 @@ function buttonSoundDelete(element) {
     makeApiCall('/sound/' + encodeURIComponent(filename), 'DELETE',
         function(response, textStatus, jqXHR) {
             let data = getDataFromSuccessfulApiResponse(response);
-            if (data != null && data instanceof Array) {
-                sounds = data;
+            if (data != null) {
+                updateSoundsData(data);
                 displaySoundsTable();
+                displaySoundDiskUsage();
             } else {
                 alert("Failed to delete sound. Server returned empty result.");
             }
@@ -1404,15 +1481,139 @@ function getBandSequencesDisplayName(band) {
     return sequenceIds.map((sequenceId) => getSequenceName(sequenceId)).join(', ');
 }
 
-function getSelectedBandSequences(select) {
-    let selected = select.val();
-    if (selected instanceof Array) {
-        return selected.filter((sequenceId) => isString(sequenceId) && sequenceId !== '');
+function normalizeBandSequenceIds(sequenceIds) {
+    let found = [];
+    let seen = {};
+    if (!(sequenceIds instanceof Array)) return found;
+    sequenceIds.forEach((sequenceId) => {
+        if (isString(sequenceId)) {
+            sequenceId = sequenceId.trim();
+            if (sequenceId !== '' && seen[sequenceId] !== true) {
+                found.push(sequenceId);
+                seen[sequenceId] = true;
+            }
+        }
+    });
+    return found;
+}
+
+function getBandSequencePickerValue(picker) {
+    if (!picker.length) return [];
+    let selected = picker.data('selectedSequences');
+    return normalizeBandSequenceIds(selected instanceof Array ? selected : []);
+}
+
+function setBandSequencePickerValue(picker, sequenceIds) {
+    picker.data('selectedSequences', normalizeBandSequenceIds(sequenceIds));
+    renderBandSequencePicker(picker);
+}
+
+function refreshBandSequencePickers() {
+    renderBandSequencePicker($('#newBandSequence'));
+    renderBandSequencePicker($('#editBandSequence'));
+}
+
+function renderBandSequencePicker(picker) {
+    if (!picker.length) return;
+    let selectedIds = getBandSequencePickerValue(picker);
+    let selectedLookup = {};
+    selectedIds.forEach((sequenceId) => selectedLookup[sequenceId] = true);
+    let sequenceOptions = getSequenceOptions();
+    let knownLookup = {};
+    sequenceOptions.forEach((sequence) => knownLookup[sequence.id] = sequence);
+
+    picker.empty();
+    picker.addClass('band-sequence-picker');
+    let row = $('<div class="row g-3">');
+    let availableList = createBandSequencePickerList("Available", "band-sequence-available-list");
+    let selectedList = createBandSequencePickerList("Selected", "band-sequence-selected-list");
+    row.append(availableList.column);
+    row.append(selectedList.column);
+    picker.append(row);
+    picker.append($('<div class="form-text mt-2">').text("When this band is read, the reader will randomly choose one of the selected sequences."));
+
+    let availableCount = 0;
+    let selectedCount = 0;
+    sequenceOptions.forEach((sequence) => {
+        if (selectedLookup[sequence.id] === true) {
+            selectedList.list.append(createBandSequencePickerItem(sequence, true));
+            selectedCount += 1;
+        } else {
+            availableList.list.append(createBandSequencePickerItem(sequence, false));
+            availableCount += 1;
+        }
+    });
+
+    selectedIds.forEach((sequenceId) => {
+        if (knownLookup[sequenceId] !== undefined) return;
+        selectedList.list.append(createBandSequencePickerItem({
+            id: sequenceId,
+            name: sequenceId + " (missing)"
+        }, true));
+        selectedCount += 1;
+    });
+
+    if (availableCount < 1) {
+        availableList.list.append($('<div class="list-group-item text-secondary">').text(sequenceOptions.length < 1 ? "No sequences loaded." : "All sequences selected."));
     }
-    if (isString(selected) && selected !== '') {
-        return [selected];
+    if (selectedCount < 1) {
+        selectedList.list.append($('<div class="list-group-item text-secondary">').text("No sequences selected."));
     }
-    return [];
+    availableList.count.text(availableCount);
+    selectedList.count.text(selectedCount);
+}
+
+function createBandSequencePickerList(title, listClass) {
+    let column = $('<div class="col-12 col-md-6">');
+    let header = $('<div class="d-flex justify-content-between align-items-center mb-1">');
+    let count = $('<span class="badge text-bg-secondary">').text("0");
+    header.append($('<div class="fw-semibold">').text(title));
+    header.append(count);
+    let list = $('<div class="list-group band-sequence-list">').addClass(listClass);
+    column.append(header);
+    column.append(list);
+    return {
+        column: column,
+        list: list,
+        count: count
+    };
+}
+
+function createBandSequencePickerItem(sequence, selected) {
+    let item = $('<div class="list-group-item band-sequence-item">');
+    let text = $('<div class="band-sequence-item-text">');
+    text.append($('<div class="band-sequence-name">').text(sequence.name));
+    let button = $('<button type="button" class="btn btn-sm">')
+        .attr('data-sequence', sequence.id);
+    if (selected) {
+        button.addClass('btn-outline-danger')
+            .attr('onclick', 'buttonRemoveBandSequence(this);')
+            .text('Remove');
+    } else {
+        button.addClass('btn-outline-primary')
+            .attr('onclick', 'buttonAddBandSequence(this);')
+            .text('Add');
+    }
+    item.append(text);
+    item.append(button);
+    return item;
+}
+
+function buttonAddBandSequence(element) {
+    let picker = $(element).closest('.band-sequence-picker');
+    let sequenceId = element.dataset.sequence;
+    let selected = getBandSequencePickerValue(picker);
+    if (isString(sequenceId) && selected.indexOf(sequenceId) < 0) {
+        selected.push(sequenceId);
+    }
+    setBandSequencePickerValue(picker, selected);
+}
+
+function buttonRemoveBandSequence(element) {
+    let picker = $(element).closest('.band-sequence-picker');
+    let sequenceId = element.dataset.sequence;
+    let selected = getBandSequencePickerValue(picker).filter((id) => id !== sequenceId);
+    setBandSequencePickerValue(picker, selected);
 }
 
 function displayBands() {
@@ -1531,7 +1732,7 @@ function clearAddNewBandForm() {
     // Clear form
     $('#newBandBandId').val('');
     $('#newBandNickname').val('');
-    $('#newBandSequence').val([]);
+    setBandSequencePickerValue($('#newBandSequence'), []);
 }
 
 function enableReadNewBandButton() {
@@ -1544,7 +1745,7 @@ function buttonAddNewBandSave() {
     // Get values
     let bandId = $('#newBandBandId').val();
     let bandNickname = $('#newBandNickname').val();
-    let bandSequences = getSelectedBandSequences($('#newBandSequence'));
+    let bandSequences = getBandSequencePickerValue($('#newBandSequence'));
     // Validate
     if (!isString(bandId) || bandId.length < 1) {
         alert("Please enter a valid Band ID.");
@@ -1601,7 +1802,7 @@ function buttonBandEdit(element) {
     // Populate edit bands form
     $('#editBandBandId').val(band_id);
     $('#editBandNickname').val(bandNickname);
-    $('#editBandSequence').val(bandSequences);
+    setBandSequencePickerValue($('#editBandSequence'), bandSequences);
     // Show edit bands form
     $('#editBandModal').modal('show');
 }
@@ -1610,7 +1811,7 @@ function buttonEditBandSave() {
     // Get values
     let bandId = $('#editBandBandId').val();
     let bandNickname = $('#editBandNickname').val();
-    let bandSequences = getSelectedBandSequences($('#editBandSequence'));
+    let bandSequences = getBandSequencePickerValue($('#editBandSequence'));
     // Validate
     if (!isString(bandId) || bandId.length < 1) {
         alert("Please enter a valid Band ID.");
