@@ -629,6 +629,14 @@ function getSequenceOptions() {
     return found;
 }
 
+function compareDisplayText(a, b) {
+    let aText = isString(a) ? a.trim() : '';
+    let bText = isString(b) ? b.trim() : '';
+    if (aText === '' && bText !== '') return 1;
+    if (aText !== '' && bText === '') return -1;
+    return aText.localeCompare(bText, undefined, { sensitivity: 'base', numeric: true });
+}
+
 
 /////// Sequence Table Functions ///////
 
@@ -660,7 +668,12 @@ function displaySequencesTable() {
     if (sequences != null && sequences instanceof Array) {
         /// Success
         sequencesCount.text(sequences.length + " total");
-        sequences.forEach((seq) => {
+        let sortedSequences = sequences.slice().sort((a, b) => {
+            let nameCompare = compareDisplayText(isDict(a) ? getStringFromDict(a, 'name') : '', isDict(b) ? getStringFromDict(b, 'name') : '');
+            if (nameCompare !== 0) return nameCompare;
+            return compareDisplayText(isDict(a) ? getStringFromDict(a, 'id') : '', isDict(b) ? getStringFromDict(b, 'id') : '');
+        });
+        sortedSequences.forEach((seq) => {
             // Is this a valid object?
             if (seq instanceof Object) {
                 // Get ID
@@ -1847,7 +1860,12 @@ function displayBands() {
     // Do we have available bands?
     if (bands != null && bands instanceof Array) {
         /// Success
-        bands.forEach((band) => {
+        let sortedBands = bands.slice().sort((a, b) => {
+            let nameCompare = compareDisplayText(isDict(a) ? getStringFromDict(a, 'name') : '', isDict(b) ? getStringFromDict(b, 'name') : '');
+            if (nameCompare !== 0) return nameCompare;
+            return compareDisplayText(isDict(a) ? getStringFromDict(a, 'band_id') : '', isDict(b) ? getStringFromDict(b, 'band_id') : '');
+        });
+        sortedBands.forEach((band) => {
             // Is this a valid object?
             if (band instanceof Object) {
                 // Get ID
