@@ -120,6 +120,33 @@ body {
     max-width: 960px;
 }
 
+.backup-drop-zone {
+    border: 2px dashed #adb5bd;
+    border-radius: 0.5rem;
+    padding: 2rem;
+    text-align: center;
+    background-color: #fff;
+}
+
+.backup-download-frame {
+    display: none;
+}
+
+.backup-drop-zone-active {
+    border-color: #0d6efd;
+    background-color: #e7f1ff;
+}
+
+.restore-preview-item {
+    display: flex;
+    align-items: flex-start;
+}
+
+.restore-preview-item span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .settings-field-row {
     border-bottom: 1px solid #dee2e6;
     padding-bottom: 0.75rem;

@@ -9,6 +9,8 @@ var settingsConfig = null;
 var statusCache = null;
 var editSequenceOriginalId = null;
 var renameSoundOriginalName = null;
+var restoreFiles = [];
+var restorePreview = null;
 
 
 /*
@@ -96,6 +98,228 @@ function onLoadSoundsPage() {
 function onLoadSettingsPage() {
     displaySettingsForm();
     getSettingsConfig();
+}
+
+function onLoadBackupPage() {
+    initializeRestoreDropZone();
+    displayRestorePreview();
+}
+
+
+/////// Backup / Restore Functions ///////
+
+function getBackupTypes() {
+    return {
+        bands: { label: "Bands", endpoint: "/backup/bands" },
+        sequences: { label: "Sequences", endpoint: "/backup/sequences" },
+        settings: { label: "Settings", endpoint: "/backup/settings" },
+        sounds: { label: "Sounds", endpoint: "/backup/sounds" }
+    };
+}
+
+function buttonBackupSelected() {
+    let selected = [];
+    $('.backup-option:checked').each(function() {
+        selected.push($(this).val());
+    });
+    if (selected.length < 1) {
+        $('#backupStatus').text("Choose at least one item to back up.");
+        return;
+    }
+    $('#backupStatus').text("Starting downloads...");
+    downloadBackupQueue(selected, 0);
+}
+
+function downloadBackupQueue(selected, index) {
+    if (index >= selected.length) {
+        $('#backupStatus').text("Downloads started.");
+        return;
+    }
+    let backupType = selected[index];
+    let backupTypes = getBackupTypes();
+    if (!backupTypes.hasOwnProperty(backupType)) {
+        downloadBackupQueue(selected, index + 1);
+        return;
+    }
+    $('#backupStatus').text("Starting " + backupTypes[backupType].label + " download...");
+    triggerBackupDownload(backupTypes[backupType].endpoint);
+    window.setTimeout(() => downloadBackupQueue(selected, index + 1), 1800);
+}
+
+function triggerBackupDownload(endpoint) {
+    let iframe = document.createElement('iframe');
+    iframe.src = endpoint;
+    iframe.className = 'backup-download-frame';
+    iframe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(iframe);
+    window.setTimeout(() => iframe.remove(), 60000);
+}
+
+function initializeRestoreDropZone() {
+    let dropZone = $('#restoreDropZone');
+    let input = $('#restoreFilesInput');
+    if (!dropZone.length || !input.length) return;
+
+    input.off('change').on('change', function() {
+        handleRestoreFiles(this.files);
+    });
+    dropZone.off('dragover').on('dragover', function(event) {
+        event.preventDefault();
+        dropZone.addClass('backup-drop-zone-active');
+    });
+    dropZone.off('dragleave').on('dragleave', function() {
+        dropZone.removeClass('backup-drop-zone-active');
+    });
+    dropZone.off('drop').on('drop', function(event) {
+        event.preventDefault();
+        dropZone.removeClass('backup-drop-zone-active');
+        let files = event.originalEvent.dataTransfer.files;
+        handleRestoreFiles(files);
+    });
+}
+
+function buttonChooseRestoreFiles() {
+    $('#restoreFilesInput').trigger('click');
+}
+
+function handleRestoreFiles(fileList) {
+    restoreFiles = Array.from(fileList || []);
+    restorePreview = null;
+    $('#restoreStatus').text('');
+    displayRestorePreview();
+    if (restoreFiles.length > 0) {
+        previewRestoreFiles();
+    }
+}
+
+function previewRestoreFiles() {
+    let formData = new FormData();
+    restoreFiles.forEach((file) => formData.append('files', file));
+    $('#restorePreview').html($('<div class="text-secondary">').text("Inspecting backup files..."));
+    makeUploadApiCall('/restore/preview', formData,
+        function(response, textStatus, jqXHR) {
+            restorePreview = getDataFromSuccessfulApiResponse(response);
+            displayRestorePreview();
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR previewing restore files:" + errorThrown);
+            restorePreview = null;
+            $('#restorePreview').html($('<div class="alert alert-danger">').text("Could not inspect backup files."));
+            $('#restoreOptions').toggleClass('d-none', true);
+        });
+}
+
+function displayRestorePreview() {
+    let preview = $('#restorePreview');
+    let options = $('#restoreOptions');
+    if (!preview.length) return;
+    preview.empty();
+
+    if (restoreFiles.length < 1) {
+        preview.append($('<div class="text-secondary">').text("No restore files selected."));
+        options.toggleClass('d-none', true);
+        return;
+    }
+    if (!isDict(restorePreview) || !(restorePreview.files instanceof Array)) {
+        options.toggleClass('d-none', true);
+        return;
+    }
+
+    let validCount = 0;
+    let list = $('<div class="list-group mb-3 restore-preview-list">');
+    restorePreview.files.forEach((file) => {
+        if (!isDict(file)) return;
+        let valid = getBoolFromDict(file, 'valid');
+        if (valid) validCount += 1;
+        list.append(createRestorePreviewItem(file, valid));
+    });
+    preview.append(list);
+    options.toggleClass('d-none', validCount < 1);
+    setRestoreButtonEnabled(validCount > 0);
+}
+
+function createRestorePreviewItem(file, valid) {
+    let filename = getStringFromDict(file, 'filename') || "Unknown file";
+    let label = getStringFromDict(file, 'label') || "Unknown";
+    let summary = getStringFromDict(file, 'summary') || "";
+    let index = getNumberFromDict(file, 'index');
+    let item = $('<label class="list-group-item restore-preview-item">');
+    let checkbox = $('<input class="form-check-input me-2 restore-file-check" type="checkbox" checked onchange="updateRestoreButtonState();">')
+        .attr('value', index);
+    checkbox.prop('disabled', !valid);
+    item.append(checkbox);
+    let text = $('<span>');
+    text.append($('<span class="fw-semibold">').text(label));
+    text.append($('<span class="text-secondary">').text(" - " + filename));
+    if (summary !== '') {
+        text.append($('<div class="small text-secondary">').text(summary));
+    }
+    if (!valid) {
+        item.addClass('text-secondary');
+    }
+    item.append(text);
+    return item;
+}
+
+function updateRestoreButtonState() {
+    setRestoreButtonEnabled($('.restore-file-check:checked:not(:disabled)').length > 0);
+}
+
+function setRestoreButtonEnabled(enabled) {
+    $('#button-restoreSelected').prop('disabled', !enabled);
+}
+
+function buttonRestoreSelected() {
+    let selectedIndexes = [];
+    $('.restore-file-check:checked:not(:disabled)').each(function() {
+        let index = parseInt($(this).val(), 10);
+        if (Number.isFinite(index)) selectedIndexes.push(index);
+    });
+    if (selectedIndexes.length < 1) {
+        $('#restoreStatus').text("Choose at least one backup file to restore.");
+        return;
+    }
+    if (!confirm("Restore selected backup files?")) {
+        return;
+    }
+    let formData = new FormData();
+    restoreFiles.forEach((file) => formData.append('files', file));
+    formData.append('mode', $('input[name="restoreMode"]:checked').val() || 'merge');
+    formData.append('selected_indexes', JSON.stringify(selectedIndexes));
+    setRestoreButtonEnabled(false);
+    $('#restoreStatus').text("Restoring...");
+    makeUploadApiCall('/restore', formData,
+        function(response, textStatus, jqXHR) {
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null) {
+                displayRestoreResults(data);
+                getSequenceList();
+                getKnownBandsList();
+            } else {
+                $('#restoreStatus').text("Restore failed.");
+            }
+            updateRestoreButtonState();
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR restoring backups:" + errorThrown);
+            $('#restoreStatus').text("Restore failed. Error contacting server.");
+            updateRestoreButtonState();
+        });
+}
+
+function displayRestoreResults(data) {
+    if (!isDict(data) || !(data.files instanceof Array)) {
+        $('#restoreStatus').text("Restore complete.");
+        return;
+    }
+    let summaries = data.files.map((file) => {
+        if (!isDict(file)) return null;
+        let label = getStringFromDict(file, 'label') || getStringFromDict(file, 'type') || "Backup";
+        let count = getNumberFromDict(file, 'count');
+        if (count == null) return label;
+        return label + ": " + count;
+    }).filter((summary) => summary != null);
+    $('#restoreStatus').text("Restore complete. " + summaries.join(', '));
 }
 
 
