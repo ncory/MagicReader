@@ -171,7 +171,7 @@ class SoundManager:
         filename = filename.strip()
         if filename.startswith(self.SOUND_DIR + '/'):
             filename = filename[len(self.SOUND_DIR) + 1:]
-        if filename == '' or filename in ['.', '..']:
+        if filename == '' or filename in ['.', '..'] or filename.startswith('.'):
             return None
         if '/' in filename or '\\' in filename or path.isabs(filename):
             return None

@@ -120,14 +120,26 @@ def RunMagicApi(magicreader: MagicBand, port=8000):
                 normalized[key] = value
         return normalized
 
+    def get_flat_sound_zip_filename(zip_entry_name):
+        """Returns the flat filename to restore for a ZIP entry, or None if it should be ignored."""
+        if not isinstance(zip_entry_name, str):
+            return None
+        zip_path = zip_entry_name.replace('\\', '/').strip()
+        zip_parts = [part for part in zip_path.split('/') if part != '']
+        if len(zip_parts) < 1 or "__MACOSX" in zip_parts:
+            return None
+        filename = os.path.basename(zip_path).strip()
+        if filename.startswith('._') or filename.startswith('.'):
+            return None
+        return magicreader.soundManager.normalizeSoundFilename(filename)
+
     def get_safe_sound_zip_entries(zip_file):
         entries = []
         seen = set()
         for info in zip_file.infolist():
             if info.is_dir():
                 continue
-            filename = os.path.basename(info.filename.replace('\\', '/')).strip()
-            filename = magicreader.soundManager.normalizeSoundFilename(filename)
+            filename = get_flat_sound_zip_filename(info.filename)
             if filename is None or filename in seen or not magicreader.soundManager.isValidSoundFilename(filename):
                 continue
             entries.append((info, filename))
