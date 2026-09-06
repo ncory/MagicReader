@@ -27,6 +27,7 @@ from rfid_weigand import RfidWeigand
 from sequence import Sequence
 from wled import WLEDManager
 from rest import RestQueue
+from gpioManager import GPIOManager
 
 print("Starting...", flush=True)
 
@@ -147,6 +148,12 @@ SETTINGS_SCHEMA = [
         "section": "Timing",
         "min": 0,
         "unit": "seconds"
+    },
+    {
+        "key": "gpio_outputs",
+        "label": "GPIO Outputs",
+        "type": "gpioOutputs",
+        "section": "GPIO"
     }
 ]
 
@@ -198,6 +205,7 @@ class MagicBand():
             self.reader = RfidMfrc522(self)
         else:
             self.reader = None
+        self.gpioManager = GPIOManager(settings.get('gpio_outputs', []))
         # Pre-load sound files
         self.loadConfiguredSounds()
     
@@ -253,6 +261,8 @@ class MagicBand():
         self.wledManager.callLedPreset(settings['wled_preset_black'])
         # Stop all sound
         self.soundManager.stopAllSounds()
+        # Reset configured GPIO outputs
+        self.gpioManager.cleanup()
         # Cleanup GPIO
         GPIO.cleanup()
 
@@ -276,7 +286,10 @@ class MagicBand():
     ######### Settings Functions #########
 
     def getSettings(self):
-        return dict(settings)
+        current_settings = dict(settings)
+        if "gpio_outputs" not in current_settings:
+            current_settings["gpio_outputs"] = []
+        return current_settings
 
     def getSettingsSchema(self):
         return SETTINGS_SCHEMA
@@ -329,6 +342,36 @@ class MagicBand():
             if value == '':
                 return (True, None) if nullable else (False, None)
             return True, value
+        if field_type == "gpioOutputs":
+            if value is None:
+                return True, []
+            if not isinstance(value, list):
+                return False, None
+            normalized_outputs = GPIOManager.normalizeOutputs(value)
+            seen_ids = set()
+            for output in value:
+                if not isinstance(output, dict):
+                    return False, None
+                output_id = output.get("id")
+                if not isinstance(output_id, str) or output_id.strip() == '' or output_id.strip() in seen_ids:
+                    return False, None
+                seen_ids.add(output_id.strip())
+                try:
+                    pin = int(output.get("pin"))
+                except Exception:
+                    return False, None
+                if pin < 1 or pin > 40:
+                    return False, None
+                trigger_state = output.get("trigger_state")
+                if not isinstance(trigger_state, str) or trigger_state.strip().upper() not in ["HIGH", "LOW"]:
+                    return False, None
+                try:
+                    pulse_seconds = float(output.get("pulse_seconds"))
+                except Exception:
+                    return False, None
+                if pulse_seconds < 0:
+                    return False, None
+            return True, normalized_outputs
         print(f"Unknown setting type for {key}: {field_type}", flush=True)
         return False, None
 
@@ -367,6 +410,7 @@ class MagicBand():
         print_band_id = bool(settings.get('print_band_id'))
         self.wledManager.address = settings.get('wled_address')
         self.loadConfiguredSounds()
+        self.gpioManager.configureOutputs(settings.get('gpio_outputs', []))
         if self.is_active:
             self.resetInactiveTimer()
         return True, restart_required
@@ -821,7 +865,7 @@ class MagicBand():
     def runSequence(self, id: str, sequence: Sequence, cancel_event: threading.Event):
         success = False
         try:
-            success = sequence.play(self.wledManager, self.soundManager, cancel_event)
+            success = sequence.play(self.wledManager, self.soundManager, self.gpioManager, cancel_event)
         except Exception as e:
             print(f"Error playing sequence {id}: {e}", flush=True)
             success = False

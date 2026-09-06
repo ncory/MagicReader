@@ -5,6 +5,7 @@ import socket
 import json
 from wled import WLEDManager
 from soundManager import SoundManager
+from gpioManager import GPIOManager
 from dataclasses import dataclass
 
 
@@ -18,6 +19,7 @@ class ActionType(str, Enum):
     BrightSign = "brightsign"
     ChromaTeq = "chromateq"
     MagicBandBroadcast = "magicBandBroadcast"
+    GPIOClosure = "gpioClosure"
 
 
 @dataclass
@@ -53,7 +55,7 @@ class SequenceAction:
             data["method"] = self.method
             if self.data is not None:
                 data["data"] = self.data
-        elif self.type in [ActionType.WLEDInternal, ActionType.SoundFile, ActionType.MusicFile]:
+        elif self.type in [ActionType.WLEDInternal, ActionType.SoundFile, ActionType.MusicFile, ActionType.GPIOClosure]:
             data["data"] = self.data
         elif self.type == ActionType.WLEDExternal:
             data["address"] = self.address
@@ -127,6 +129,11 @@ class SequenceAction:
             if not isinstance(dataObj, str):
                 dataObj = None
             return SequenceAction.new_action_magicband_broadcast(address, dataObj, delay)
+        elif type == 'gpioClosure':
+            if not isinstance(dataObj, str):
+                print("Invalid GPIO output id provided", flush=True)
+                dataObj = None
+            return SequenceAction.new_action_gpio_closure(dataObj, delay)
         else:
             print(f"Unknown action type: {type}", flush=True)
             return None
@@ -210,7 +217,15 @@ class SequenceAction:
         action.delay = delay
         return action
 
-    def performAction(self, wled: WLEDManager, soundManager: SoundManager, cancel_event = None):
+    @classmethod
+    @staticmethod
+    def new_action_gpio_closure(output_id: str, delay: int = 0):
+        action = SequenceAction(ActionType.GPIOClosure)
+        action.data = output_id
+        action.delay = delay
+        return action
+
+    def performAction(self, wled: WLEDManager, soundManager: SoundManager, gpioManager: GPIOManager = None, cancel_event = None):
         """Performs the action based on its type."""
         # Check for delay
         if self.delay > 0:
@@ -241,6 +256,8 @@ class SequenceAction:
             return self.performChromaTeqAction()
         elif self.type == ActionType.MagicBandBroadcast:
             return self.performMagicBandBroadcastAction()
+        elif self.type == ActionType.GPIOClosure:
+            return self.performGPIOClosureAction(gpioManager, cancel_event)
         else:
             print(f"Unknown action type: {self.type}", flush=True)
             return False
@@ -390,3 +407,13 @@ class SequenceAction:
         # Done
         print("Finished sending Magic Band broadcast", flush=True)
         return True
+
+    def performGPIOClosureAction(self, gpioManager: GPIOManager, cancel_event = None):
+        """Triggers a configured GPIO output."""
+        if gpioManager is None or not isinstance(gpioManager, GPIOManager):
+            print("Invalid GPIOManager provided", flush=True)
+            return False
+        if self.data is None or not isinstance(self.data, str):
+            print("Invalid GPIO output id provided", flush=True)
+            return False
+        return gpioManager.triggerOutput(self.data, cancel_event)

@@ -82,6 +82,19 @@ body {
     color: #6c757d;
 }
 
+.settings-gpio-field-row > .form-label {
+    font-weight: 500;
+}
+
+.settings-gpio-output-row {
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.75rem;
+}
+
+.settings-gpio-output-row:last-child {
+    border-bottom: 0;
+}
+
 .sound-file-name {
     min-width: 180px;
     overflow-wrap: anywhere;

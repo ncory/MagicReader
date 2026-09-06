@@ -84,6 +84,7 @@ function onLoadSequencesPage() {
     displaySequencesTable()
     // Refresh sequences
     getFullSequenceList();
+    getSettingsConfig();
 }
 
 function onLoadSoundsPage() {
@@ -630,6 +631,7 @@ function createActionTypeSelect(type) {
         ["wledExternal", "WLED External"],
         ["soundFile", "Sound File"],
         ["musicFile", "Music File"],
+        ["gpioClosure", "GPIO Closure"],
         ["brightsign", "BrightSign"],
         ["chromateq", "ChromaTeq"],
         ["magicBandBroadcast", "MagicBand Broadcast"]
@@ -649,7 +651,14 @@ function createActionValueControl(action) {
         .append($('<option value="DELETE">DELETE</option>'))
         .val(getStringFromDict(action, 'method') || "GET"));
     wrapper.append($('<input type="text" class="form-control action-value">').val(getActionValue(action)));
+    wrapper.append(createActionGpioOutputSelect(getActionValue(action)));
     return wrapper;
+}
+
+function createActionGpioOutputSelect(selectedValue) {
+    let select = $('<select class="form-select action-gpio-output d-none">');
+    updateGpioOutputsInSelect(select, selectedValue);
+    return select;
 }
 
 function createActionRowButtons() {
@@ -672,7 +681,7 @@ function getActionValue(action) {
     if (type === "url") return stringifyActionData(action.data);
     if (type === "delay") return "";
     if (type === "wledInternal" || type === "wledExternal") return action.data == null ? "" : action.data;
-    if (type === "soundFile" || type === "musicFile") return action.data || "";
+    if (type === "soundFile" || type === "musicFile" || type === "gpioClosure") return action.data || "";
     if (type === "magicBandBroadcast") return action.data || "";
     return getStringFromDict(action, 'command') || "";
 }
@@ -692,9 +701,12 @@ function updateActionRowForType(row) {
     let target = row.find('.action-target');
     let method = row.find('.action-method');
     let value = row.find('.action-value');
+    let gpioOutput = row.find('.action-gpio-output');
     let port = row.find('.action-port');
     target.prop('disabled', false).attr('placeholder', 'Target');
     method.toggleClass('d-none', type !== "url");
+    gpioOutput.toggleClass('d-none', type !== "gpioClosure");
+    value.toggleClass('d-none', type === "gpioClosure");
     value.attr('placeholder', 'Value');
     port.prop('disabled', false);
 
@@ -725,6 +737,11 @@ function updateActionRowForType(row) {
         target.prop('disabled', true).val('').attr('placeholder', 'Sound Manager');
         value.prop('disabled', false);
         value.attr('placeholder', 'Music filename');
+        port.prop('disabled', true).val('');
+    } else if (type === "gpioClosure") {
+        target.prop('disabled', true).val('').attr('placeholder', 'Configured GPIO');
+        value.prop('disabled', true).val('');
+        updateGpioOutputsInSelect(gpioOutput, gpioOutput.val() || value.val());
         port.prop('disabled', true).val('');
     } else if (type === "magicBandBroadcast") {
         target.attr('placeholder', 'Address');
@@ -775,6 +792,8 @@ function buildActionFromRow(row) {
         if (!Number.isFinite(action.data)) action.data = 0;
     } else if (type === "soundFile" || type === "musicFile") {
         action.data = value;
+    } else if (type === "gpioClosure") {
+        action.data = row.find('.action-gpio-output').val();
     } else if (type === "magicBandBroadcast") {
         action.address = target;
         action.data = value;
@@ -823,6 +842,7 @@ function getSettingsConfig() {
         function(response, textStatus, jqXHR) {
             settingsConfig = getDataFromSuccessfulApiResponse(response);
             displaySettingsForm();
+            refreshSequenceGpioOutputSelects();
             $('#settingsSaveStatus').text('');
         },
         function(jqXHR, textStatus, errorThrown) {
@@ -865,6 +885,13 @@ function displaySettingsForm() {
 function createSettingsFieldRow(field) {
     let key = getStringFromDict(field, 'key');
     let label = getStringFromDict(field, 'label') || key;
+    let type = getStringFromDict(field, 'type') || "text";
+    if (type === "gpioOutputs") {
+        let row = $('<div class="mb-3 settings-field-row settings-gpio-field-row">');
+        row.append($('<div class="form-label">').attr('id', 'setting-' + key + '-label').text(label));
+        row.append(createSettingsControl(field));
+        return row;
+    }
     let row = $('<div class="row mb-3 align-items-center settings-field-row">');
     row.append($('<label class="col-sm-4 col-lg-3 col-form-label">').attr('for', 'setting-' + key).text(label));
     let controlParent = $('<div class="col-sm-8 col-lg-6">');
@@ -938,6 +965,9 @@ function createSettingsControl(field) {
             .append(input)
             .append($('<span class="input-group-text settings-input-unit">').text(unit));
     }
+    if (type === "gpioOutputs") {
+        return createGpioOutputsControl(key, value);
+    }
     return $('<input type="text" class="form-control settings-input">')
         .attr('id', 'setting-' + key)
         .attr('data-key', key)
@@ -956,6 +986,13 @@ function collectSettingsPayload() {
         let nullable = input.attr('data-nullable') === 'true';
         if (type === "boolean") {
             payload[key] = input.is(':checked');
+        } else if (type === "gpioOutputs") {
+            let outputs = collectGpioOutputs(input);
+            if (outputs == null) {
+                valid = false;
+                return false;
+            }
+            payload[key] = outputs;
         } else if (type === "number") {
             let value = parseInt(input.val(), 10);
             if (!Number.isFinite(value)) {
@@ -983,6 +1020,7 @@ function buttonSaveSettings() {
             if (isDict(data)) {
                 settingsConfig = data;
                 displaySettingsForm();
+                refreshSequenceGpioOutputSelects();
                 let message = "Settings saved.";
                 if (response.restartRequired === true) {
                     message += " Restart required for RFID changes.";
@@ -1003,6 +1041,144 @@ function buttonSaveSettings() {
 
 function setSaveSettingsButtonEnabled(enabled) {
     $('#button-saveSettings').prop('disabled', !enabled);
+}
+
+function createGpioOutputsControl(key, value) {
+    let wrapper = $('<div class="settings-input settings-gpio-outputs">')
+        .attr('id', 'setting-' + key)
+        .attr('data-key', key)
+        .attr('data-type', 'gpioOutputs')
+        .attr('aria-labelledby', 'setting-' + key + '-label');
+    let tbody = $('<div class="settings-gpio-output-body">');
+    wrapper.append(tbody);
+    let outputs = value instanceof Array ? value : [];
+    outputs.forEach((output) => addGpioOutputRow(tbody, output));
+    wrapper.append($('<button type="button" class="btn btn-sm btn-success" onclick="buttonAddGpioOutput(this);">').text('Add GPIO Output'));
+    return wrapper;
+}
+
+function addGpioOutputRow(tbody, output) {
+    if (!isDict(output)) output = {};
+    let row = $('<div class="row g-2 align-items-end mb-2 settings-gpio-output-row">');
+    row.append($('<div class="col-12 col-md-2">')
+        .append($('<label class="form-label small mb-1">').text('ID'))
+        .append($('<input type="text" class="form-control form-control-sm gpio-output-id">').val(getStringFromDict(output, 'id') || '')));
+    row.append($('<div class="col-12 col-md-3">')
+        .append($('<label class="form-label small mb-1">').text('Name'))
+        .append($('<input type="text" class="form-control form-control-sm gpio-output-name">').val(getStringFromDict(output, 'name') || '')));
+    row.append($('<div class="col-6 col-md-2">')
+        .append($('<label class="form-label small mb-1">').text('BOARD Pin'))
+        .append($('<input type="number" min="1" max="40" class="form-control form-control-sm gpio-output-pin">').val(getNumberFromDict(output, 'pin') || '')));
+    row.append($('<div class="col-6 col-md-2">')
+        .append($('<label class="form-label small mb-1">').text('Trigger'))
+        .append($('<select class="form-select form-select-sm gpio-output-trigger">')
+        .append($('<option value="LOW">LOW</option>'))
+        .append($('<option value="HIGH">HIGH</option>'))
+        .val(getStringFromDict(output, 'trigger_state') || 'LOW')));
+    row.append($('<div class="col-8 col-md-2">')
+        .append($('<label class="form-label small mb-1">').text('Pulse'))
+        .append($('<div class="input-group input-group-sm">')
+        .append($('<input type="number" min="0" step="0.1" class="form-control gpio-output-pulse">').val(getNumberFromDict(output, 'pulse_seconds') ?? 0.5))
+        .append($('<span class="input-group-text">').text('seconds'))));
+    row.append($('<div class="col-4 col-md-1">')
+        .append($('<button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="buttonDeleteGpioOutput(this);">').text('Delete')));
+    tbody.append(row);
+}
+
+function buttonAddGpioOutput(element) {
+    let tbody = $(element).closest('.settings-gpio-outputs').find('.settings-gpio-output-body');
+    addGpioOutputRow(tbody, {
+        id: '',
+        name: '',
+        pin: '',
+        trigger_state: 'LOW',
+        pulse_seconds: 0.5
+    });
+}
+
+function buttonDeleteGpioOutput(element) {
+    $(element).closest('.settings-gpio-output-row').remove();
+}
+
+function collectGpioOutputs(wrapper) {
+    let outputs = [];
+    let ids = {};
+    let valid = true;
+    wrapper.find('.settings-gpio-output-row').each(function() {
+        let row = $(this);
+        let id = row.find('.gpio-output-id').val().trim();
+        let name = row.find('.gpio-output-name').val().trim();
+        let pin = parseInt(row.find('.gpio-output-pin').val(), 10);
+        let triggerState = row.find('.gpio-output-trigger').val();
+        let pulseSeconds = parseFloat(row.find('.gpio-output-pulse').val());
+        if (id.length < 1) {
+            alert("Each GPIO output needs an ID.");
+            valid = false;
+            return false;
+        }
+        if (ids[id] === true) {
+            alert("GPIO output IDs must be unique.");
+            valid = false;
+            return false;
+        }
+        if (!Number.isFinite(pin) || pin < 1 || pin > 40) {
+            alert("GPIO output pins must be BOARD pin numbers from 1 to 40.");
+            valid = false;
+            return false;
+        }
+        if (triggerState !== "LOW" && triggerState !== "HIGH") {
+            alert("GPIO trigger state must be LOW or HIGH.");
+            valid = false;
+            return false;
+        }
+        if (!Number.isFinite(pulseSeconds) || pulseSeconds < 0) {
+            alert("GPIO pulse duration must be zero or greater.");
+            valid = false;
+            return false;
+        }
+        ids[id] = true;
+        outputs.push({
+            id: id,
+            name: name.length > 0 ? name : id,
+            pin: pin,
+            trigger_state: triggerState,
+            pulse_seconds: pulseSeconds
+        });
+    });
+    return valid ? outputs : null;
+}
+
+function getConfiguredGpioOutputs() {
+    if (isDict(settingsConfig) && isDict(settingsConfig.settings) && settingsConfig.settings.gpio_outputs instanceof Array) {
+        return settingsConfig.settings.gpio_outputs;
+    }
+    return [];
+}
+
+function updateGpioOutputsInSelect(select, selectedValue=null) {
+    select.empty();
+    select.append($('<option value="">Select GPIO output</option>'));
+    let outputs = getConfiguredGpioOutputs();
+    let foundSelected = selectedValue == null || selectedValue === '';
+    outputs.forEach((output) => {
+        if (!isDict(output)) return;
+        let id = getStringFromDict(output, 'id');
+        if (id == null || id === '') return;
+        let name = getStringFromDict(output, 'name') || id;
+        if (id === selectedValue) foundSelected = true;
+        select.append($('<option>').attr('value', id).text(name + ' (' + id + ')'));
+    });
+    if (!foundSelected) {
+        select.append($('<option>').attr('value', selectedValue).text(selectedValue + ' (missing)'));
+    }
+    select.val(selectedValue == null ? '' : selectedValue);
+}
+
+function refreshSequenceGpioOutputSelects() {
+    $('.action-gpio-output').each(function() {
+        let select = $(this);
+        updateGpioOutputsInSelect(select, select.val());
+    });
 }
 
 
