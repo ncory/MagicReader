@@ -3,6 +3,7 @@ from helpers import AppEvent, AppEventType, CancelReadException
 from mfrc522 import SimpleMFRC522
 from os import path
 import RPi.GPIO as GPIO
+import gpioBackend
 import spidev
 import time
 import datetime
@@ -11,7 +12,6 @@ class RfidMfrc522(rfid.RfidReader):
     SPI_BUS = 0
     SPI_DEVICE_NUMBER = 0
     SPI_DEVICE = '/dev/spidev0.0'
-    GPIO_DEVICE = '/dev/gpiomem'
     RESET_PIN = 22
     VERSION_REG = 0x37
     STARTUP_TIMEOUT_SECONDS = 30
@@ -26,14 +26,24 @@ class RfidMfrc522(rfid.RfidReader):
     @classmethod
     def waitForMfrc522Hardware(cls):
         """Waits for the MFRC522 chip to respond over SPI."""
-        required_devices = [cls.SPI_DEVICE, cls.GPIO_DEVICE]
+        print(gpioBackend.describe(), flush=True)
         deadline = time.monotonic() + cls.STARTUP_TIMEOUT_SECONDS
         attempt = 1
         last_error = None
         last_version = None
 
         while time.monotonic() < deadline:
-            missing_devices = [device for device in required_devices if not path.exists(device)]
+            # Which GPIO device to expect depends on the installed backend:
+            # /dev/gpiomem for the classic RPi.GPIO, a gpiochip character
+            # device for rpi-lgpio. Hardcoding /dev/gpiomem meant this probe
+            # timed out on Trixie and on the Pi 5, where it does not exist.
+            missing_devices = []
+            if not path.exists(cls.SPI_DEVICE):
+                missing_devices.append(cls.SPI_DEVICE)
+            if gpioBackend.findGpioDevice() is None:
+                missing_devices.append(
+                    " or ".join(gpioBackend.requiredGpioDevices())
+                )
             if missing_devices:
                 last_error = f"missing device file(s): {', '.join(missing_devices)}"
                 print(f"MFRC522 probe attempt {attempt}: {last_error}", flush=True)

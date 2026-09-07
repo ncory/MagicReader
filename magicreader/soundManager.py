@@ -3,6 +3,7 @@ from os import path
 import shutil
 
 import appPaths
+import audioBackend
 # Import PyGame for sound playback and hide prompts
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
@@ -24,6 +25,11 @@ class SoundManager:
         pygame.mixer.pre_init(44100, -16, 1, 4096 )
         pygame.mixer.init()
         pygame.init()
+        # SDL picks the audio driver silently, and which one it lands on can
+        # change when the OS gains or loses a sound server. Say so in the log
+        # so a silent reader is diagnosable without a debugging session.
+        print(audioBackend.describe(), flush=True)
+        print(audioBackend.describeDrivers(), flush=True)
         # Dictionary to hold sound objects
         self.sounds = {}
 

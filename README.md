@@ -10,3 +10,47 @@ A Raspberry Pi based RFID reader based on the MagicBand readers at Disney parks.
 curl -sL "https://github.com/ncory/MagicReader/raw/refs/heads/main/install.sh" | bash
 ```
 The install is not tied to a user named `pi`: it uses whichever account you created when flashing the card.
+
+## Operating system support
+Tested on Raspberry Pi OS Bookworm (Python 3.11) on a Pi 4.
+
+The GPIO stack differs by release, so `install.sh` picks the backend to match
+the machine and prints which one it chose:
+
+| OS | GPIO package | Why |
+| --- | --- | --- |
+| Bookworm and earlier | `RPi.GPIO` | mmaps `/dev/gpiomem`; works as it always has |
+| Trixie and later | `rpi-lgpio` | Trixie's kernel dropped the sysfs GPIO interface `RPi.GPIO` relies on |
+| Pi 5, any OS | `rpi-lgpio` | the RP1 chip means there is no `/dev/gpiomem`, only `/dev/gpiomem0`-`4` |
+
+`rpi-lgpio` is a drop-in replacement: it installs the same `RPi.GPIO` module
+name on top of the kernel's gpiochip device, so no application code changes.
+The two **cannot be installed at the same time**.
+
+To force a choice:
+```
+MAGICREADER_GPIO_PACKAGE=rpi-lgpio bash install.sh
+```
+
+The app logs the backend it detected at startup, e.g.
+`GPIO backend: rpi-lgpio 0.6 (lgpio), device: /dev/gpiochip0`. Check that line
+first if the reader does not come up.
+
+## Audio
+Sound goes `pygame.mixer` -> SDL2 -> an audio driver -> the hardware. SDL picks
+the driver itself, trying `pulseaudio` before `alsa` and taking the first that
+connects. On a Lite image nothing is listening on the PulseAudio socket, so it
+falls through to ALSA and talks to the card directly. PipeWire, which replaces
+PulseAudio on the Desktop image, sits at that same layer - it is not a
+replacement for anything in pygame, and needs no application code changes.
+
+The app logs what SDL settled on at startup:
+```
+Audio backend: pygame 2.6.1 | SDL 2.28.4 | driver: alsa | 44100Hz 16-bit mono | device: "bcm2835 Headphones, bcm2835 Headphones" (+2 more)
+Audio drivers compiled in (priority order): pulseaudio, alsa, dsp, disk, dummy
+```
+Check that line first if there is no sound. The two usual causes are SDL
+connecting to a sound server the service cannot reach, and the default device
+being HDMI rather than the headphone jack - the log shows both. To force ALSA,
+uncomment `SDL_AUDIODRIVER=alsa` in `MagicReader.service.template` and re-run
+`service-install.sh`.

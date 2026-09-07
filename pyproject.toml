@@ -12,11 +12,14 @@ authors = [
 description = "An RFID reader app for Raspberry Pi that replicates the functionality of Disney MagicBand readers."
 version = "0.0.1"
 requires-python = ">=3.11.2"
+# The GPIO backend is deliberately not listed here. Two packages install a
+# module named RPi.GPIO and only one may be present: "RPi.GPIO" through
+# Bookworm, "rpi-lgpio" from Trixie onward and on the Pi 5. install.sh picks
+# the right one for the machine; see magicreader/gpioBackend.py.
 dependencies = [
     "flask",
     "waitress",
     "httplib2",
-    "RPi.GPIO",
     "spidev",
     "mfrc522",
     "pyserial",

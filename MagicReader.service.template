@@ -18,6 +18,13 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 WorkingDirectory=@REPO_DIR@
 Environment="XDG_RUNTIME_DIR=/run/user/@SERVICE_UID@"
 Environment=PYTHONUNBUFFERED=1
+# SDL tries pulseaudio before alsa and takes whichever connects first.
+# On a Lite image nothing answers on the PulseAudio socket so it lands on
+# alsa. If a sound server is present (PipeWire ships a PulseAudio socket)
+# and audio goes wrong - silence, or output on HDMI instead of the jack -
+# uncomment this to pin SDL to alsa. The app logs the driver it chose at
+# startup; check that line first.
+#Environment=SDL_AUDIODRIVER=alsa
 ExecStart=@REPO_DIR@/.venv/bin/python @REPO_DIR@/magicreader/__main__.py
 Restart=on-failure
 RestartSec=5
