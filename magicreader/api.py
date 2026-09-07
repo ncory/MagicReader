@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-from flask import Flask, jsonify, request, render_template, send_file, send_from_directory
+from flask import Flask, request, render_template, send_file, send_from_directory
 from magicreader import MagicBand
-from sequenceManager import SequenceManager
 from sequence import Sequence
 from werkzeug.datastructures import FileStorage
 import platform
@@ -15,8 +14,6 @@ import shutil
 import zipfile
 import jsonStore
 import appPaths
-#import requests
-#from flask_restful import Api, Resource
 
 
 # Upload limits. The endpoints are unauthenticated on the local network, and
@@ -509,7 +506,6 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         # Play sequence
         if sequence is not None:
             magicreader.api_playSequence(seq_id)
-            #success = magicreader.playSequence(sequence, sequence_name)
             return {"result": "ok"}
         # Failed if we got here
         return {"result": "error"}
@@ -863,8 +859,6 @@ def RunMagicApi(magicreader: MagicBand, port=80):
                     "isDisneyBand": isDisneyBand
                 }
             }
-
-    
 
     # Serve it
     serveApp(app, port)

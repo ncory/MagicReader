@@ -1,25 +1,17 @@
 #!/usr/bin/env python
-#import binascii
 import logging
-#import struct
 import time
 import json
 import sys
 import traceback
-from json import dumps
-#from httplib2 import Http
-#from mfrc522 import SimpleMFRC522
 import RPi.GPIO as GPIO
-#import signal
 import threading
 import queue
-#import datetime
-from functools import total_ordering
-from helpers import State, AppEvent, AppEventType, SettingValueError#, CancelReadException
+from helpers import State, AppEvent, AppEventType, SettingValueError
 from bandManager import BandManager
 from sequenceManager import SequenceManager
 from soundManager import SoundManager
-from rfid import RfidRead#, RfidReader
+from rfid import RfidRead
 from rfid_mfrc522 import RfidMfrc522
 from sequence import Sequence
 from wled import WLEDManager
@@ -44,8 +36,6 @@ if data is None or not isinstance(data, dict) or 'settings' not in data:
 config = data
 settings = config['settings']
 print_band_id = bool(settings['print_band_id'])
-#bands = config['bands']
-#sequences = config['sequences']
 SETTINGS_SCHEMA = [
     {
         "key": "print_band_id",
@@ -158,7 +148,6 @@ log.setLevel(logging.CRITICAL)
 print("Finished Config Loading", flush=True)
 
 
-
 ######### Class #########
 
 class MagicBand():
@@ -173,8 +162,6 @@ class MagicBand():
         self.allowRead = False
         self.setState(State.Starting)
         self.is_active = False
-        self.should_cancel_read = False
-        self.thread = None
         self.inactive_timer = None
         self.wait_mode_timer = None
         self.read_delay_timer = None
@@ -186,8 +173,6 @@ class MagicBand():
         self.active_sequence = None
         self.active_sequence_id = None
         self.pending_rfid_after_sequence_cancel = None
-        # Create http object to use later
-        #self.http_obj = Http()
         # Create queue
         self.event_queue = queue.PriorityQueue()
         self.event_thread = None
@@ -219,8 +204,6 @@ class MagicBand():
             return False
         if self.reader.start() is False:
             return False
-        # Install signal handler
-        #signal.signal(signal.SIGUSR1, MagicBand.on_signusr1)
         # Play startup lights and sound
         self.setState(State.Welcome)
         self.triggerStartup()
@@ -607,97 +590,6 @@ class MagicBand():
                     self.onError("Internal error")
                 except Exception as inner:
                     print(f"ERROR while reporting event failure: {inner}", flush=True)
-    '''
-    ######### RFID Functions #########
-
-    def runReaderThread(self):
-        print("Starting RFID read thread", flush=True)
-        while self.is_active:
-            # Perform RFID read
-            print("RFID:: Waiting for RFID....", flush=True)
-            id = None
-            try:
-                id = self.reader.read_id()
-                if id is None:
-                    continue
-                print(f"RFID:: Read RFID: {id}", flush=True)
-                # Pass to event queue
-                read = RfidRead(id)
-                event = AppEvent(AppEventType.ReadRfid, read)
-                self.event_queue.put((5, event))
-            except CancelReadException:
-                print("RFID:: Got CancelReadException!!", flush=True)
-                return
-            except Exception as e:
-                if not self.is_active:
-                    return
-                print("RFID:: Error reading RFID", flush=True)
-                print (e, flush=True)
-    
-
-    ######### MagicBand Functions #########
-
-    def startRfidRead(self, read_delay):
-        return
-        """Starts an RFID lookup after the specified delay."""
-        if not self.is_active:
-            return
-        print(f"Waiting {read_delay} seconds")
-        # Wait for delay
-        time.sleep(read_delay)
-        # Trigger lights and sound
-        self.triggerWaiting()
-        # Perform RFID read
-        self.setStatus("Waiting for MagicBand tap...")
-        print("Waiting for RFID....")
-        id = None
-        try:
-            id, text = self.reader.read()
-            print(f"Read RFID: {id}")
-        except CancelReadException:
-            print("Got CancelReadException!!")
-            self.setStatus("Standby")
-            return
-        except Exception as e:
-            if not self.is_active:
-                return
-            print("Error reading RFID")
-            print (e)
-            self.onError("Error reading RFID")
-        # Did we get an ID?
-        if not self.is_active:
-            return
-        if id is not None:
-            self.onReadMagicBand(id)
-        else:
-            print("Error reading RFID")
-            self.onError("Error reading RFID")
-    
-    def cancelRead(self):
-        """Sends the SIGUSR1 signal to interrupt any pending RFID reads."""
-        # Set flag to tell ourself what we're doing
-        self.should_cancel_read = True
-        # Kill read thread
-        #if self.thread is not None:
-            #signal.pthread_kill(self.thread.ident, signal.SIGTSTP)
-        #print("Sent kill signal")
-        # Send signal
-        #signal.raise_signal(signal.SIGUSR1)
-    
-    def on_signusr1(sig, frame):
-        raise CancelReadException()
-
-'''
-    def cancelRead(self):
-        """Sends the SIGUSR1 signal to interrupt any pending RFID reads."""
-        # Set flag to tell ourself what we're doing
-        self.should_cancel_read = True
-        # Kill read thread
-        #if self.thread is not None:
-            #signal.pthread_kill(self.thread.ident, signal.SIGTSTP)
-        #print("Sent kill signal")
-        # Send signal
-        #signal.raise_signal(signal.SIGUSR1)
 
     ######### MagicBand Functions #########
 
@@ -728,57 +620,6 @@ class MagicBand():
             # Error!
             self.onError("Failed to playback sequence")
     
-    '''
-    @staticmethod
-    def bandsAppendFoundSeqName(band_dict, found_seq_names):
-        if isinstance(band_dict, dict) and 'sequence' in band_dict:
-            seq_name = band_dict.get('sequence')
-            if seq_name is not None and isinstance(seq_name, str):
-                found_seq_names.append(seq_name)
-
-    def lookupBandId(self, band_id):
-        """Looks up sequence name for band id"""
-        found_seq_names = []     
-        # Look for band_id
-        if isinstance(band_id, str) and band_id in bands:
-            print("Found band id", flush=True)
-            found = bands.get(band_id)
-            if isinstance(found, list):
-                for item in found:
-                    MagicBand.bandsAppendFoundSeqName(item, found_seq_names)
-            elif isinstance(found, dict):
-                MagicBand.bandsAppendFoundSeqName(found, found_seq_names)
-        # Otherwise, use sequences for "unknown"
-        if len(found_seq_names) < 1 and 'unknown' in bands:
-            print("Did not find band id - using 'unknown'", flush=True)
-            found = bands.get('unknown')
-            if isinstance(found, list):
-                for item in found:
-                    MagicBand.bandsAppendFoundSeqName(item, found_seq_names)
-            elif isinstance(found, dict):
-                MagicBand.bandsAppendFoundSeqName(found, found_seq_names)
-        # Now return a random item from found_seq_names (or None)
-        if len(found_seq_names) > 0:
-            print("Making random choice of names", flush=True)
-            return random.choice(found_seq_names)
-        else:
-            print("No sequence name found", flush=True)
-            return None
-    '''
-    '''
-    def lookupSequence(self, name):
-        """Looks up sequence for specified name"""
-        found_sequences = []
-        # Look for name
-        if name is not None and isinstance(name, str):
-            if name in sequences:
-                found = sequences.get(name)
-                if isinstance(found, dict):
-                    return found
-        # If we got here, we didn't find it
-        return None
-    '''
-
 
     ######### Trigger Functions for LEDs and sounds #########
 
@@ -808,8 +649,6 @@ class MagicBand():
     
     def triggerBlackout(self):
         """Turns off LEDs, stops all sounds, and cancels any pending RFID read actions"""
-        # Stop RFID reading
-        #self.cancelRead()
         if self.read_once_enabled:
             self.read_once_enabled = False
             self.read_once_result = None
@@ -817,21 +656,6 @@ class MagicBand():
         self.soundManager.stopAllSounds()
         # Recall black LED preset
         self.wledManager.callLedPreset(settings['wled_preset_black'])
-        
-    
-    ######### LED functions #########
-    '''
-    def callLedPreset(self, preset: int):
-        """Makes a REST call to the internal WLED instance to recall a preset."""
-        # Chec input
-        if preset is None or not isinstance(preset, int):
-            return
-        # Construct URL to call
-        url = f"http://{settings['wled_address']}/win&PL={preset}"
-        print(f"Calling LED preset: {url}", flush=True)
-        # Make REST call
-        RestHelpers.makeRestCall(url, 'GET')
-    '''
 
 
     ######### Sequence functions #########
@@ -938,144 +762,8 @@ class MagicBand():
             self.startWaitModeTimer(0)
 
 
-    ######### Action functions #########
-    '''
-    def performAction(self, action):
-        """Performs the action based on type (URL, Brightsign)"""
-        # Check for valid action dictionary
-        if action is None or not isinstance(action, dict):
-            print("Invalid action", flush=True)
-            return False
-        # Check type
-        type = None
-        if 'type' in action:
-            type = action.get('type')
-        if type is None or not isinstance(type, str):
-            print("Invalid action type", flush=True)
-            return False
-        # Check for delay
-        delay = 0
-        if 'delay' in action:
-            delay = action.get('delay')
-            if not isinstance(delay, int):
-                delay = 0
-        if delay > 0:
-            # Sleep
-            time.sleep(delay)
-        # Now actually do something...
-        # URL type
-        if type == 'url':
-            print("URL Action", flush=True)
-            # Get values
-            url = None
-            if 'url' in action:
-                url = action.get('url')
-            if url is None or not isinstance(url, str):
-                print("Invalid URL", flush=True)
-                return False
-            method = None
-            if 'method' in action:
-                method = action.get('method')
-            if method is None or not isinstance(method, str):
-                method = "GET"
-            # Perform REST call
-            self.makeRestCall(url, method)
-            # Done
-            return True
-        # Brightsign type
-        elif type == 'brightsign':
-            print("BrightSign Action", flush=True)
-            # Get values
-            address = None
-            if 'address' in action:
-                address = action.get('address')
-            if address is None or not isinstance(address, str):
-                print("Invalid BightSign player address", flush=True)
-                return False
-            port = None
-            if 'port' in action:
-                port = action.get('port')
-            if port is None or not isinstance(port, int):
-                print("Invalid BrightSign player port", flush=True)
-                return False
-            command = None
-            if 'command' in action:
-                command = action.get('command')
-            if command is None or not isinstance(command, str):
-                print("Invalid BrightSign player command")
-                return False
-            # Make UDP call to BrightSign player
-            MagicBand.sendBrightSignCommand(address, port, command)
-            return True
-        elif type == 'chromateq':
-            print("Chromateq Action", flush=True)
-            # Get values
-            address = None
-            if 'address' in action:
-                address = action.get('address')
-            if address is None or not isinstance(address, str):
-                print("Invalid Chromateq address", flush=True)
-                return False
-            port = None
-            if 'port' in action:
-                port = action.get('port')
-            if port is None or not isinstance(port, int):
-                print("Invalid Chromateq port", flush=True)
-                return False
-            scene_id = None
-            if 'scene_id' in action:
-                scene_id = action.get('scene_id')
-            if scene_id is None or not isinstance(scene_id, int) or scene_id < 0:
-                print("Invalid Chromateq scene_id")
-                return False
-            area = 0
-            if 'area' in action:
-                area = action.get('area')
-                if area is None or not isinstance(area, int) or area < 0:
-                    area = 0
-            status = True
-            if 'status' in action:
-                status = action.get('status')
-                if status is None or not isinstance(area, bool):
-                    status = True
-            # Make UDP call to Chromateq software
-            MagicBand.sendChromateqSceneCommand(address, port, scene_id, area, status)
-            return True
-        # Unknown type
-        else:
-            print(f"Unknown action type: {type}", flush=True)
-            return False
-    
-    '''
-
-    '''
-    ######### Web Hook Functions #########
-
-    @classmethod
-    def makeRestCall(self, url, method = 'GET', playload = None, isJson = False):
-        """Makes the specified HTTP call with an optional playlod and JSON content type."""
-        print(f"REST Call: {method}: {url}", flush=True)
-        try:
-            # Use JSON content-type?
-            if isJson:
-                message_headers = {'Content-Type': 'application/json; charset=UTF-8'}
-            else:
-                message_headers = {}
-            # Make HTTP call
-            response = self.http_obj.request(
-                uri = url,
-                method = method,
-                headers = message_headers
-            )
-            #print(response, flush=True
-        except Exception as e:
-            print("Error making REST call", flush=True)
-            print(e, flush=True)    
-    '''
-    
-
     ######### Web Api Calls #########
-    
+
     def api_blackout(self):
         # Push event
         self.event_queue.put((2, AppEvent(AppEventType.Blackout, True)))
@@ -1102,16 +790,6 @@ class MagicBand():
         # Push event
         self.event_queue.put((2, AppEvent(AppEventType.StopSequence)))
         
-    def api_getSoundsList(self):
-        # Create list of sound files
-        list = self.soundManager.listAllSoundFiles()
-        # Return
-        return list
-    
-    def api_deleteSoundFile(self, filename: str):
-        # Delete sound file
-        return self.soundManager.deleteSoundFile(filename)
-    
     def api_read_single_rfid(self) -> tuple[str, bool] | None:
         # Temporarily disable reading
         previous_read = self.allowRead

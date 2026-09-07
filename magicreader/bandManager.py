@@ -1,6 +1,5 @@
 import jsonStore
 import random
-#import re
 
 class BandManager:
     FILENAME = 'bands.json'
@@ -122,39 +121,3 @@ class BandManager:
         return jsonStore.saveJsonAtomic(jsonStore.dataPath(BandManager.FILENAME), self.bands)
     
 
-    ######### Is Disney Band #########
-'''
-    REGEX_MAGICBAND = re.compile("5841[0-9]+")
-    #REGEX_MAGICBAND = re.compile("04[0-9a-zA-Z]+80")
-    REGEX_MAGICBAND_PLUS = re.compile("04[0-9a-zA-Z]+90")
-
-    @staticmethod
-    def isIdDisneyBand(id: str) -> bool:
-        if not isinstance(id, str):
-            id = str(id)
-        if BandManager.isIdMagicBandOrMagicBand2(id):
-            return True
-        elif BandManager.isIdMagicBandOrMagicBand2(id):
-            return True
-        return False
-    
-    @staticmethod
-    def isIdMagicBandOrMagicBand2(id: str) -> bool:
-        if not isinstance(id, str):
-            id = str(id)
-        # Run RegEx on id
-        if BandManager.REGEX_MAGICBAND.match(id):
-            return True
-        return False
-    
-    @staticmethod
-    def isIdMagicBandPlus(id: str) -> bool:
-        if not isinstance(id, str):
-            id = str(id)
-        # Run RegEx on id
-        if BandManager.REGEX_MAGICBAND_PLUS.match(id):
-            return True
-        return False
-'''
-
-    

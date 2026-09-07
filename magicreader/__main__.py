@@ -20,8 +20,6 @@ app = MagicBand()
 if not app.run():
     print("Fatal error while starting app", flush=True)
     sys.exit(-1)
-#app_thread = threading.Thread(target=app.run, daemon=True)
-#app_thread.start()
 
 # Run API
 api_thread = threading.Thread(target=RunMagicApi, args=[app], daemon=True)
@@ -46,8 +44,6 @@ finally:
     # stay set, the MFRC522 is never closed).
     app.shutdown()
     app.waitForShutdown(timeout=10)
-    # Kill API thread
-    #api_thread.kill()
     # Exit
     sys.exit(0)
 

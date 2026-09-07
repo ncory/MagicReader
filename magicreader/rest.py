@@ -91,37 +91,3 @@ class RestHelpers:
             #print(response, flush=True)
         except Exception as e:
             print(f"Error making REST call: {e}", flush=True)
-
-
-
-'''
-import requests
-
-class RestHelpers:
-
-    @staticmethod
-    def makeRestCall(url, method = 'GET', playload = None, isJson = False, timeout: float = 0.001):
-        """Makes the specified HTTP call with an optional playlod and JSON content type."""
-        print(f"REST Call: {method}: {url}", flush=True)
-        try:
-            # Use JSON content-type?
-            if isJson:
-                message_headers = {'Content-Type': 'application/json; charset=UTF-8'}
-            else:
-                message_headers = {}
-            # Which flavor of request?
-            if method == 'GET':
-                response = requests.get(url, headers=message_headers, timeout=timeout)
-            elif method == 'POST':
-                response = requests.post(url, headers=message_headers, json=playload, timeout=timeout)
-            elif method == 'PUT':
-                response = requests.put(url, headers=message_headers, json=playload, timeout=timeout)
-            elif method == 'DELETE':
-                response = requests.delete(url, headers=message_headers, timeout=timeout)
-            else:
-                print(f"Unsupported HTTP method: {method}", flush=True)
-                return
-            #print(response, flush=True
-        except Exception as e:
-            print(f"Error making REST call: {e}", flush=True)
-'''

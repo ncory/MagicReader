@@ -3,7 +3,6 @@ import math
 from rest import RestQueue
 import time
 import socket
-import json
 from wled import WLEDManager
 from soundManager import SoundManager
 from gpioManager import GPIOManager
