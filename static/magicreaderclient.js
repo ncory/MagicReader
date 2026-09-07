@@ -52,6 +52,15 @@ function getApiErrorMessage(response, fallback) {
     return fallback;
 }
 
+function getAjaxErrorMessage(jqXHR, fallback) {
+    // The server answers errors with JSON even on non-2xx statuses (e.g. a 413
+    // when an upload is over the size limit) - prefer that over a generic message.
+    if (jqXHR != null && isDict(jqXHR.responseJSON)) {
+        return getApiErrorMessage(jqXHR.responseJSON, fallback);
+    }
+    return fallback;
+}
+
 function getStringFromDict(dict, key) {
     if (dict.hasOwnProperty(key)) {
         let val = dict[key];
@@ -215,7 +224,8 @@ function previewRestoreFiles() {
         function(jqXHR, textStatus, errorThrown) {
             console.debug("ERROR previewing restore files:" + errorThrown);
             restorePreview = null;
-            $('#restorePreview').html($('<div class="alert alert-danger">').text("Could not inspect backup files."));
+            $('#restorePreview').html($('<div class="alert alert-danger">')
+                .text(getAjaxErrorMessage(jqXHR, "Could not inspect backup files.")));
             $('#restoreOptions').toggleClass('d-none', true);
         });
 }
@@ -313,7 +323,7 @@ function buttonRestoreSelected() {
         },
         function(jqXHR, textStatus, errorThrown) {
             console.debug("ERROR restoring backups:" + errorThrown);
-            $('#restoreStatus').text("Restore failed. Error contacting server.");
+            $('#restoreStatus').text(getAjaxErrorMessage(jqXHR, "Restore failed. Error contacting server."));
             updateRestoreButtonState();
         });
 }
@@ -1625,7 +1635,7 @@ function buttonUploadSound() {
         },
         function(jqXHR, textStatus, errorThrown) {
             console.debug("ERROR uploading sound:" + errorThrown);
-            $('#soundsUploadStatus').text("Upload failed. Error contacting server.");
+            $('#soundsUploadStatus').text(getAjaxErrorMessage(jqXHR, "Upload failed. Error contacting server."));
             setUploadSoundButtonEnabled(true);
         });
 }

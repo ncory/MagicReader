@@ -18,12 +18,53 @@ import jsonStore
 #from flask_restful import Api, Resource
 
 
+# Upload limits. The endpoints are unauthenticated on the local network, and
+# the Pi runs from an SD card, so an unbounded upload could fill the card or
+# exhaust memory. A full sounds backup is the largest legitimate upload - a
+# few hundred MB - so the request cap is set above that.
+MAX_UPLOAD_BYTES = 512 * 1024 * 1024        # whole request body
+MAX_RESTORE_TOTAL_BYTES = 512 * 1024 * 1024  # uncompressed total from one zip
+MAX_RESTORE_FILE_BYTES = 128 * 1024 * 1024   # uncompressed size of one sound
+MIN_FREE_DISK_BYTES = 256 * 1024 * 1024      # headroom to leave on the card
+MAX_JSON_UPLOAD_BYTES = 8 * 1024 * 1024      # bands/sequences/settings backups
+COPY_CHUNK_BYTES = 64 * 1024
+
+
+def copyWithLimit(source, dest, limit: int):
+    """Copies at most limit bytes. Returns bytes written, or None if exceeded.
+
+    The uncompressed size in a zip header is attacker-controlled, so the limit
+    has to be enforced while reading rather than trusted up front.
+    """
+    written = 0
+    while True:
+        chunk = source.read(COPY_CHUNK_BYTES)
+        if not chunk:
+            return written
+        written += len(chunk)
+        if written > limit:
+            return None
+        dest.write(chunk)
+
+
 def RunMagicApi(magicreader: MagicBand, port=80):
     # Create app
     app = Flask("MagicReaderApi")
+    # Reject oversized request bodies before they are buffered.
+    app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_BYTES
     # Supress logging all the damn requests
     log = logging.getLogger('werkzeug')
     log.setLevel(logging.WARNING)
+
+    @app.errorhandler(413)
+    def request_too_large(e):
+        # Answer in the same JSON shape as everything else so the web UI can
+        # show it, rather than Werkzeug's HTML error page.
+        limit_mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+        return {
+            "result": "error",
+            "data": {"message": f"Upload is too large. The limit is {limit_mb} MB."}
+        }, 413
 
     backup_labels = {
         "bands": "Bands",
@@ -137,20 +178,29 @@ def RunMagicApi(magicreader: MagicBand, port=80):
     def get_safe_sound_zip_entries(zip_file):
         entries = []
         seen = set()
+        total_size = 0
         for info in zip_file.infolist():
             if info.is_dir():
                 continue
             filename = get_flat_sound_zip_filename(info.filename)
             if filename is None or filename in seen or not magicreader.soundManager.isValidSoundFilename(filename):
                 continue
+            # Drop implausible entries up front. These sizes come from the zip
+            # header so they cannot be trusted on their own - extraction
+            # enforces the same limits again while reading.
+            if info.file_size > MAX_RESTORE_FILE_BYTES:
+                print(f"Skipping '{filename}': {info.file_size} bytes exceeds the per-file limit", flush=True)
+                continue
+            if total_size + info.file_size > MAX_RESTORE_TOTAL_BYTES:
+                print(f"Skipping '{filename}': archive exceeds the {MAX_RESTORE_TOTAL_BYTES} byte total limit", flush=True)
+                continue
+            total_size += info.file_size
             entries.append((info, filename))
             seen.add(filename)
         return entries
 
     def detect_restore_file(upload: FileStorage, index: int):
         filename = upload.filename or f"File {index + 1}"
-        content = upload.read()
-        upload.seek(0)
         detected = {
             "index": index,
             "filename": filename,
@@ -161,7 +211,10 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         }
         if filename.lower().endswith(".zip"):
             try:
-                with zipfile.ZipFile(io.BytesIO(content), 'r') as zip_file:
+                # Read the archive through its spooled stream instead of
+                # loading the whole upload into memory twice.
+                upload.stream.seek(0)
+                with zipfile.ZipFile(upload.stream, 'r') as zip_file:
                     entries = get_safe_sound_zip_entries(zip_file)
                     total_size = sum(info.file_size for info, _ in entries)
                     detected.update({
@@ -176,7 +229,7 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         if not filename.lower().endswith(".json"):
             return detected
         try:
-            data = json.loads(content.decode('utf-8'))
+            data = read_json_upload(upload)
         except Exception as e:
             detected["summary"] = f"Invalid JSON file: {e}"
             return detected
@@ -228,13 +281,20 @@ def RunMagicApi(magicreader: MagicBand, port=80):
             })
         return detected
 
-    def restore_json_file(upload):
-        content = upload.read()
-        upload.seek(0)
+    def read_json_upload(upload):
+        """Parses an uploaded JSON backup, refusing anything implausibly large."""
+        upload.stream.seek(0)
+        # Read one byte past the cap so an oversized file is detectable.
+        content = upload.stream.read(MAX_JSON_UPLOAD_BYTES + 1)
+        upload.stream.seek(0)
+        if len(content) > MAX_JSON_UPLOAD_BYTES:
+            raise ValueError(
+                f"file is larger than the {MAX_JSON_UPLOAD_BYTES // (1024 * 1024)} MB limit for JSON backups"
+            )
         return json.loads(content.decode('utf-8'))
 
     def restore_bands(upload, mode):
-        backup_bands = normalize_band_backup(restore_json_file(upload))
+        backup_bands = normalize_band_backup(read_json_upload(upload))
         if backup_bands is None:
             return None
         if mode == "overwrite":
@@ -248,7 +308,7 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         return len(backup_bands)
 
     def restore_sequences(upload, mode):
-        backup_sequences = normalize_sequence_backup(restore_json_file(upload))
+        backup_sequences = normalize_sequence_backup(read_json_upload(upload))
         if backup_sequences is None:
             return None
         if mode == "overwrite":
@@ -261,7 +321,7 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         return len(backup_sequences)
 
     def restore_settings(upload, mode):
-        backup_settings = normalize_settings_backup(restore_json_file(upload))
+        backup_settings = normalize_settings_backup(read_json_upload(upload))
         if backup_settings is None:
             return None
         settings_to_apply = backup_settings
@@ -272,24 +332,43 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         return len(backup_settings) if success else None
 
     def restore_sounds(upload, mode):
-        content = upload.read()
-        upload.seek(0)
         restored_count = 0
-        with zipfile.ZipFile(io.BytesIO(content), 'r') as zip_file:
+        written_total = 0
+        # Read from the upload's own stream rather than upload.read() - Werkzeug
+        # already spools it to a temp file, so this avoids holding the whole
+        # archive (and a second BytesIO copy of it) in memory.
+        upload.stream.seek(0)
+        with zipfile.ZipFile(upload.stream, 'r') as zip_file:
             entries = get_safe_sound_zip_entries(zip_file)
             if mode == "overwrite":
                 for filename in magicreader.soundManager.listAllSoundFiles():
                     magicreader.soundManager.deleteSoundFile(filename)
-            os.makedirs(magicreader.soundManager.getSoundsDirectory(), exist_ok=True)
+            sounds_dir = magicreader.soundManager.getSoundsDirectory()
+            os.makedirs(sounds_dir, exist_ok=True)
             for info, filename in entries:
                 file_path = magicreader.soundManager.getSoundFilePath(filename)
                 if file_path is None:
                     continue
                 if mode != "overwrite" and os.path.exists(file_path):
                     continue
+                # Stop before filling the SD card.
+                if shutil.disk_usage(sounds_dir).free - info.file_size < MIN_FREE_DISK_BYTES:
+                    print(f"Stopping restore at '{filename}': not enough free disk space", flush=True)
+                    break
+                remaining = min(MAX_RESTORE_FILE_BYTES, MAX_RESTORE_TOTAL_BYTES - written_total)
                 with zip_file.open(info) as source:
                     with open(file_path, 'wb') as dest:
-                        shutil.copyfileobj(source, dest)
+                        written = copyWithLimit(source, dest, remaining)
+                if written is None:
+                    # The header understated the real size - a zip bomb, or a
+                    # corrupt archive. Drop the partial file and stop.
+                    print(f"Aborting restore at '{filename}': expands beyond the allowed size", flush=True)
+                    try:
+                        os.remove(file_path)
+                    except Exception:
+                        pass
+                    break
+                written_total += written
                 magicreader.soundManager.removeSoundFromCache(filename)
                 restored_count += 1
         magicreader.loadConfiguredSounds()

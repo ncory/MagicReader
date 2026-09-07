@@ -3,7 +3,6 @@ from helpers import AppEvent, AppEventType, CancelReadException
 from mfrc522 import SimpleMFRC522
 from os import path
 import RPi.GPIO as GPIO
-import re
 import spidev
 import time
 import datetime
@@ -137,33 +136,46 @@ class RfidMfrc522(rfid.RfidReader):
     def stop(self):
         self.reader.READER.Close_MFRC522()
     
-    REGEX_MAGICBAND = re.compile("5841[0-9]+")
-    #REGEX_MAGICBAND = re.compile("04[0-9a-zA-Z]+80")
-    REGEX_MAGICBAND_PLUS = re.compile("04[0-9a-zA-Z]+90")
+    # SimpleMFRC522.read_id() runs a single anticollision cascade and packs the
+    # five bytes it gets back into one integer: the cascade tag (0x88), the
+    # first three UID bytes, and the BCC checksum. For any 7-byte NXP tag -
+    # which every MagicBand is - those bytes are 0x88, 0x04, then the UID, so
+    # the value always falls in 0x8804000000..0x8804FFFFFF. That is 584182661120
+    # to 584199438335 in decimal, which is where the old "5841" prefix came from.
+    UID_CASCADE_NXP_MIN = 0x8804000000
+    UID_CASCADE_NXP_MAX = 0x8804FFFFFF
 
-    def isDisneyBand(self, id:str) -> bool:
-        if not isinstance(id, str):
-            id = str(id)
-        if RfidMfrc522.isIdMagicBandOrMagicBand2(id):
-            return True
-        elif RfidMfrc522.isIdMagicBandOrMagicBand2(id):
-            return True
-        return False
+    def isDisneyBand(self, id) -> bool:
+        # Only one test is possible here - see isIdMagicBandPlus() for why
+        # MagicBand+ cannot be told apart from a MagicBand 2 at this layer.
+        return RfidMfrc522.isIdMagicBandOrMagicBand2(id)
 
     @staticmethod
-    def isIdMagicBandOrMagicBand2(id: str) -> bool:
-        if not isinstance(id, str):
-            id = str(id)
-        # Run RegEx on id
-        if RfidMfrc522.REGEX_MAGICBAND.match(id):
-            return True
-        return False
-    
+    def isIdMagicBandOrMagicBand2(id) -> bool:
+        """True if the id looks like a 7-byte NXP UID read at cascade level 1.
+
+        Note this identifies the tag family, not Disney specifically: any
+        7-byte NXP tag (NTAG, MIFARE Ultralight) lands in the same range.
+        """
+        try:
+            value = int(id)
+        except (TypeError, ValueError):
+            return False
+        return RfidMfrc522.UID_CASCADE_NXP_MIN <= value <= RfidMfrc522.UID_CASCADE_NXP_MAX
+
     @staticmethod
-    def isIdMagicBandPlus(id: str) -> bool:
-        if not isinstance(id, str):
-            id = str(id)
-        # Run RegEx on id
-        if RfidMfrc522.REGEX_MAGICBAND_PLUS.match(id):
-            return True
+    def isIdMagicBandPlus(id) -> bool:
+        """Always False - MagicBand+ cannot be detected with this reader setup.
+
+        A MagicBand+ is distinguished from a MagicBand 2 by the last byte of
+        its full 7-byte UID (0x90 rather than 0x80). read_id() only performs
+        cascade level 1, so it never sees bytes 3-6 and that byte is simply not
+        available. Telling them apart would need a second cascade level, which
+        the mfrc522 library's MFRC522_Anticoll() does not implement.
+
+        Kept as a named no-op so the intent is documented rather than looking
+        like an oversight. The previous implementation matched
+        "04[0-9a-zA-Z]+90" against the decimal id, which could never match:
+        str(int) never starts with a zero.
+        """
         return False
