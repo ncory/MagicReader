@@ -68,3 +68,13 @@ __pycache__/
 !/data/*.default.json
 /data/*.bak
 /data/.tmp-*
+
+# MagicReader sounds #
+######################
+# Only a minimal starter set ships with the repo. Everything else in Sounds/
+# is user content managed through the web UI (and the Backup page), so it is
+# untracked and never collides on pull.
+/Sounds/*
+!/Sounds/Error.wav
+!/Sounds/Startup.wav
+!/Sounds/TapIn.wav

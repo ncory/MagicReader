@@ -5,7 +5,7 @@
         "actions": [
             {
                 "type": "soundFile",
-                "data": "Tap In - Generic.wav",
+                "data": "TapIn.wav",
                 "delay": 0
             },
             {
