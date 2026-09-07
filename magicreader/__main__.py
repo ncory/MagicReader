@@ -40,7 +40,12 @@ except Exception as e:
 finally:
     # Stop app thread + cleanup
     print("Exiting app...", flush=True)
+    # shutdown() only queues the Shutdown event; the event thread is what
+    # actually runs cleanup(). Wait for it, or exiting here kills that daemon
+    # thread mid-flight and cleanup never happens (LEDs stay lit, GPIO outputs
+    # stay set, the MFRC522 is never closed).
     app.shutdown()
+    app.waitForShutdown(timeout=10)
     # Kill API thread
     #api_thread.kill()
     # Exit

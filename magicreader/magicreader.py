@@ -5,6 +5,7 @@ import logging
 import time
 import json
 import sys
+import traceback
 from json import dumps
 #from httplib2 import Http
 #from mfrc522 import SimpleMFRC522
@@ -223,7 +224,20 @@ class MagicBand():
         # Add event to queue
         self.event_queue.put((1, AppEvent(AppEventType.Shutdown)))
 
+    def waitForShutdown(self, timeout: float = 10.0) -> bool:
+        """Blocks until the event thread has finished cleanup(). Returns True if it did."""
+        if self.event_thread is None:
+            # Never started - run cleanup inline so we still reset hardware.
+            self.cleanup()
+            return True
+        self.event_thread.join(timeout)
+        if self.event_thread.is_alive():
+            print("WARNING: Timed out waiting for cleanup to finish", flush=True)
+            return False
+        return True
+
     def cleanup(self):
+        print("Cleanup starting...", flush=True)
         # Clear active flags
         self.is_active = False
         self.allowRead = False
@@ -231,15 +245,18 @@ class MagicBand():
         # Reset configured GPIO outputs before the RFID library clears GPIO state.
         self.gpioManager.cleanup()
         # Stop RIFD reader
-        self.reader.stop()
-        # Stop REST queue
-        RestQueue().shutdown()
-        # Trigger blackout on LEDs
+        if self.reader is not None:
+            self.reader.stop()
+        # Trigger blackout on LEDs. Must be queued BEFORE the REST queue is
+        # stopped, otherwise the call is never sent and the LEDs stay lit.
         self.wledManager.callLedPreset(settings['wled_preset_black'])
+        # Stop REST queue (drains the blackout call above before exiting)
+        RestQueue().shutdown()
         # Stop all sound
         self.soundManager.stopAllSounds()
         # Cleanup GPIO
         GPIO.cleanup()
+        print("Cleanup finished", flush=True)
 
     def onError(self, message: str = None):
         # Status
@@ -479,81 +496,96 @@ class MagicBand():
             priority, event = self.event_queue.get()
             # Reset inactivity timer
             self.resetInactiveTimer()
-            # What type of event?
-            if event.type == AppEventType.ReadRfid:
-                # READ RFID
-                # Are we looking for a read once?
-                if self.read_once_enabled:
-                    # Accept this as our result
-                    self.read_once_enabled = False
-                    self.read_once_result = event.data
-                    continue
-                active_sequence = self.getActiveSequence()
-                if active_sequence is not None:
-                    if active_sequence.cancel_allowed:
-                        print("RFID tap received - cancelling active sequence", flush=True)
-                        if self.pending_rfid_after_sequence_cancel is None:
-                            self.pending_rfid_after_sequence_cancel = event.data
+            try:
+                # What type of event?
+                if event.type == AppEventType.ReadRfid:
+                    # READ RFID
+                    # Are we looking for a read once?
+                    if self.read_once_enabled:
+                        # Accept this as our result
+                        self.read_once_enabled = False
+                        self.read_once_result = event.data
+                        continue
+                    active_sequence = self.getActiveSequence()
+                    if active_sequence is not None:
+                        if active_sequence.cancel_allowed:
+                            print("RFID tap received - cancelling active sequence", flush=True)
+                            if self.pending_rfid_after_sequence_cancel is None:
+                                self.pending_rfid_after_sequence_cancel = event.data
+                            else:
+                                print("RFID tap ignored - sequence cancellation already pending", flush=True)
+                            self.allowRead = False
+                            self.cancelActiveSequence()
                         else:
-                            print("RFID tap ignored - sequence cancellation already pending", flush=True)
+                            print("RFID tap ignored - active sequence cannot be cancelled", flush=True)
+                        continue
+                    # Are we looking for an ID?
+                    if self.allowRead:
+                        id = event.data.id
+                        print(f"Accepted RFID read: {id}   isDisney: {event.data.isDisney}", flush=True)
+                        # Stop more reads
                         self.allowRead = False
+                        # Handle read
+                        self.onReadMagicBand(id, event.data.isDisney)
+                elif event.type == AppEventType.EnterWaitMode:
+                    # ENTER WAIT MODE
+                    if self.isSequenceActive():
                         self.cancelActiveSequence()
-                    else:
-                        print("RFID tap ignored - active sequence cannot be cancelled", flush=True)
-                    continue
-                # Are we looking for an ID?
-                if self.allowRead:
-                    id = event.data.id
-                    print(f"Accepted RFID read: {id}   isDisney: {event.data.isDisney}", flush=True)
-                    # Stop more reads
-                    self.allowRead = False
-                    # Handle read
-                    self.onReadMagicBand(id, event.data.isDisney)
-            elif event.type == AppEventType.EnterWaitMode:
-                # ENTER WAIT MODE
-                if self.isSequenceActive():
+                        continue
+                    # Allow reads
+                    self.allowRead = True
+                    # Set state
+                    self.setState(State.WaitingForTap)
+                    # Trigger lights and sound
+                    self.triggerWaiting()
+                elif event.type == AppEventType.PlaySequence:
+                    # PLAY SEQUENCE
+                    if not self.playSequence(event.data):
+                        self.onError("Failed to start sequence")
+                elif event.type == AppEventType.StopSequence:
+                    # STOP SEQUENCE
+                    sequence_was_active = self.cancelActiveSequence()
+                    # Stop timers
+                    self.stopReadDelayTimer()
+                    self.stopWaitModeTimer()
+                    if not sequence_was_active:
+                        # Stop any current sounds and return to wait mode.
+                        self.soundManager.stopAllSounds()
+                        self.event_queue.put((1, AppEvent(AppEventType.EnterWaitMode)))
+                elif event.type == AppEventType.SequenceFinished:
+                    # SEQUENCE FINISHED
+                    self.sequenceFinished(event.data)
+                elif event.type == AppEventType.Blackout:
+                    # BLACKOUT
                     self.cancelActiveSequence()
-                    continue
-                # Allow reads
-                self.allowRead = True
-                # Set state
-                self.setState(State.WaitingForTap)
-                # Trigger lights and sound
-                self.triggerWaiting()
-            elif event.type == AppEventType.PlaySequence:
-                # PLAY SEQUENCE
-                if not self.playSequence(event.data):
-                    self.onError("Failed to start sequence")
-            elif event.type == AppEventType.StopSequence:
-                # STOP SEQUENCE
-                sequence_was_active = self.cancelActiveSequence()
-                # Stop timers
-                self.stopReadDelayTimer()
-                self.stopWaitModeTimer()
-                if not sequence_was_active:
-                    # Stop any current sounds and return to wait mode.
-                    self.soundManager.stopAllSounds()
-                    self.event_queue.put((1, AppEvent(AppEventType.EnterWaitMode)))
-            elif event.type == AppEventType.SequenceFinished:
-                # SEQUENCE FINISHED
-                self.sequenceFinished(event.data)
-            elif event.type == AppEventType.Blackout:
-                # BLACKOUT
-                self.cancelActiveSequence()
-                # Cancel reads?
-                if isinstance(event.data, bool) and event.data is True:
-                    self.allowRead = False
-                # Set state
-                self.setState(State.Blackout)
-                # Trigger blackout lights/sounds
-                self.triggerBlackout()
-            elif event.type == AppEventType.Shutdown:
-                # SHUTDOWN
-                self.cancelActiveSequence()
-                # Run cleanup routine
-                self.cleanup()
-                # End this thread
-                return
+                    # Cancel reads?
+                    if isinstance(event.data, bool) and event.data is True:
+                        self.allowRead = False
+                    # Set state
+                    self.setState(State.Blackout)
+                    # Trigger blackout lights/sounds
+                    self.triggerBlackout()
+                elif event.type == AppEventType.Shutdown:
+                    # SHUTDOWN
+                    self.cancelActiveSequence()
+                    # Run cleanup routine
+                    self.cleanup()
+                    # End this thread
+                    return
+            except Exception as e:
+                # A raise here used to kill the event thread outright: the app
+                # would keep reporting a healthy state over the API while
+                # silently ignoring every tap. Log it and stay alive instead.
+                print(f"ERROR handling event {getattr(event, 'type', None)}: {e}", flush=True)
+                traceback.print_exc()
+                # A failed shutdown still has to end the thread, otherwise
+                # waitForShutdown() blocks until its timeout.
+                if getattr(event, 'type', None) == AppEventType.Shutdown:
+                    return
+                try:
+                    self.onError("Internal error")
+                except Exception as inner:
+                    print(f"ERROR while reporting event failure: {inner}", flush=True)
     '''
     ######### RFID Functions #########
 
@@ -1059,7 +1091,7 @@ class MagicBand():
         # Delete sound file
         return self.soundManager.deleteSoundFile(filename)
     
-    def api_read_single_rfid(self) -> tuple[str, bool, bool]:
+    def api_read_single_rfid(self) -> tuple[str, bool] | None:
         # Temporarily disable reading
         previous_read = self.allowRead
         self.allowRead = False

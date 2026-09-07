@@ -14,7 +14,6 @@ class Sequence:
         self.cancel_allowed = True
         self.actions = []
     
-    @classmethod
     @staticmethod
     def createFromDict(data: dict, id: str):
         """Creates a Sequence object from a dictionary."""

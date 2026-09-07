@@ -4,13 +4,23 @@ import threading
 
 class RestQueue:
     _instance = None
+    _instance_lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):
+        # Double-checked locking so concurrent callers share one instance
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
+        # __init__ runs on every RestQueue() call, even though __new__ returns
+        # the shared instance. Only build the queue and worker thread once,
+        # otherwise each call orphans the previous queue and leaks its thread.
+        if getattr(self, '_initialized', False):
+            return
+        self._initialized = True
         # Create queue
         self.is_active = True
         self.queue = queue.PriorityQueue()
@@ -37,9 +47,15 @@ class RestQueue:
                 print(f"Unknown event in REST queue: {event}", flush=True)
                 continue
 
-    def shutdown(self):
-        # Add 'False' to queue - means shutdown
-        self.queue.put((0, False))
+    def shutdown(self, timeout: float = 5.0):
+        """Drains any queued calls, then stops the worker thread."""
+        # Priority 99 so calls already queued (priority 10) still go out first -
+        # the shutdown blackout preset has to reach WLED before we stop.
+        self.queue.put((99, False))
+        if self.thread is not None and self.thread.is_alive():
+            self.thread.join(timeout)
+            if self.thread.is_alive():
+                print("WARNING: REST queue did not drain before timeout", flush=True)
     
     def makeRestCallAsync(self, url, method = 'GET', payload = None, isJson = False, isUrlEncoded = False):
         """Queues a REST call to be made later."""

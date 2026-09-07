@@ -709,8 +709,10 @@ def RunMagicApi(magicreader: MagicBand, port=80):
     
     @app.route('/bands/read', methods=['PUT'])
     def put_bandsRead():
-        # Ask app to read a single RFID
-        (id, isDisneyBand) = magicreader.api_read_single_rfid()
+        # Ask app to read a single RFID. Returns None if nothing was tapped
+        # before the timeout, so unpack only after checking.
+        result = magicreader.api_read_single_rfid()
+        id, isDisneyBand = result if result is not None else (None, False)
         # Did we get an ID?
         if id is None:
             # No - report error

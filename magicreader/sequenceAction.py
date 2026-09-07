@@ -69,7 +69,6 @@ class SequenceAction:
             data["data"] = self.data
         return data
     
-    @classmethod
     @staticmethod
     def createFromDict(data: dict):
         """Creates a SequenceAction object from a dictionary."""
@@ -138,14 +137,12 @@ class SequenceAction:
             print(f"Unknown action type: {type}", flush=True)
             return None
     
-    @classmethod
     @staticmethod
     def new_action_delay(delay: int = 0):
         action = SequenceAction(ActionType.Delay)
         action.delay = delay
         return action
 
-    @classmethod
     @staticmethod
     def new_action_wled_internal(preset: int = 0, delay: int = 0):
         action = SequenceAction(ActionType.WLEDInternal)
@@ -153,7 +150,6 @@ class SequenceAction:
         action.delay = delay
         return action
     
-    @classmethod
     @staticmethod
     def new_action_wled_external(address: str = None, preset: int = 0, delay: int = 0):
         action = SequenceAction(ActionType.WLEDExternal)
@@ -162,7 +158,6 @@ class SequenceAction:
         action.delay = delay
         return action
     
-    @classmethod
     @staticmethod
     def new_action_sound_file(filename: str, delay: int = 0):
         action = SequenceAction(ActionType.SoundFile)
@@ -170,7 +165,6 @@ class SequenceAction:
         action.delay = delay
         return action
 
-    @classmethod
     @staticmethod
     def new_action_music_file(filename: str, delay: int = 0):
         action = SequenceAction(ActionType.MusicFile)
@@ -178,7 +172,6 @@ class SequenceAction:
         action.delay = delay
         return action
     
-    @classmethod
     @staticmethod
     def new_action_url(url: str, method: str = "GET", data = None, delay: int = 0):
         action = SequenceAction(ActionType.URL)
@@ -188,7 +181,6 @@ class SequenceAction:
         action.delay = delay
         return action
     
-    @classmethod
     @staticmethod
     def new_action_brightsign(address: str, port: int, command: str, delay: int = 0):
         action = SequenceAction(ActionType.BrightSign)
@@ -198,7 +190,6 @@ class SequenceAction:
         action.delay = delay
         return action
     
-    @classmethod
     @staticmethod
     def new_action_chromateq(address: str, port: int, command: str, delay: int = 0):
         action = SequenceAction(ActionType.ChromaTeq)
@@ -208,7 +199,6 @@ class SequenceAction:
         action.delay = delay
         return action
     
-    @classmethod
     @staticmethod
     def new_action_magicband_broadcast(address:str, data: str, delay: int = 0):
         action = SequenceAction(ActionType.MagicBandBroadcast)
@@ -217,7 +207,6 @@ class SequenceAction:
         action.delay = delay
         return action
 
-    @classmethod
     @staticmethod
     def new_action_gpio_closure(output_id: str, delay: int = 0):
         action = SequenceAction(ActionType.GPIOClosure)
