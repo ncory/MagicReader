@@ -1,13 +1,20 @@
 import os
 from os import path
 import shutil
+
+import appPaths
 # Import PyGame for sound playback and hide prompts
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
 
 class SoundManager:
-    SOUND_DIR = 'Sounds'
+    # The literal directory name, used when stripping a "Sounds/" prefix that a
+    # settings value or sequence action may carry.
+    SOUND_DIR_NAME = 'Sounds'
+    # The absolute location on disk, so nothing here depends on the process
+    # working directory.
+    SOUND_DIR = appPaths.SOUNDS_DIR
     SOUND_EXTENSIONS = {'.aac', '.flac', '.m4a', '.mp3', '.ogg', '.wav'}
 
     def __init__(self):
@@ -26,10 +33,9 @@ class SoundManager:
     def preLoadSounds(self, soundList):
         """Preloads a list of sounds into the sound manager."""
         for sound in soundList:
-            try:
-                self.sounds[sound] = pygame.mixer.Sound(sound)
-            except pygame.error as e:
-                print(f"Error loading sound {sound}: {e}", flush=True)
+            loaded = self.loadSound(sound)
+            if loaded is not None:
+                self.sounds[sound] = loaded
     
     def preLoadSound(self, soundName: str, filename: str) -> bool:
         if filename is None or not isinstance(filename, str) or filename == '':
@@ -47,18 +53,17 @@ class SoundManager:
 
     def loadSound(self, filename: str) -> pygame.mixer.Sound:
         """Pre-loads the specified file as a PyGame sound object"""
-        # Append 'Sounds/' to filename
-        if filename is None or not isinstance(filename, str) or filename == '':
+        file_path = self.getSoundFilePath(filename)
+        if file_path is None:
+            print(f"Invalid sound filename: {filename}", flush=True)
             return None
-        if not filename.startswith('Sounds/'):
-            filename = 'Sounds/' + filename
         # Check if file exists
-        if not path.exists(filename):
-            print("Missing sound file :" + filename, flush=True)
+        if not path.exists(file_path):
+            print("Missing sound file :" + file_path, flush=True)
             return None
         # Load file into memory as a PyGame Sound instance
         try:
-            return pygame.mixer.Sound(filename)
+            return pygame.mixer.Sound(file_path)
         except Exception as e:
             print("Error loading sound", flush=True)
             print(e, flush=True)
@@ -117,18 +122,17 @@ class SoundManager:
 
     def playMusic(self, filename: str, stopCurrent: bool = True):
         """Plays the specified file as PyGame music"""
-        # Append 'Sounds/' to filename
-        if filename is None or not isinstance(filename, str) or filename == '':
-            return None
-        if not filename.startswith('Sounds/'):
-            filename = 'Sounds/' + filename
+        file_path = self.getSoundFilePath(filename)
+        if file_path is None:
+            print(f"Invalid music filename: {filename}", flush=True)
+            return
         # Check if file exists
-        if not path.exists(filename):
-            print("Missing music file :" + filename, flush=True)
+        if not path.exists(file_path):
+            print("Missing music file :" + file_path, flush=True)
             return
         # Try playing as music
         try:
-            pygame.mixer.music.load(filename)
+            pygame.mixer.music.load(file_path)
             if stopCurrent:
                 pygame.mixer.music.stop()
             pygame.mixer.music.play()
@@ -162,15 +166,19 @@ class SoundManager:
 
     def getSoundsDirectory(self):
         """Returns the absolute path to the Sounds directory."""
-        return path.abspath(self.SOUND_DIR)
+        return self.SOUND_DIR
 
     def normalizeSoundFilename(self, filename: str):
         """Returns a direct Sounds filename, or None if the name is unsafe."""
         if filename is None or not isinstance(filename, str):
             return None
         filename = filename.strip()
-        if filename.startswith(self.SOUND_DIR + '/'):
-            filename = filename[len(self.SOUND_DIR) + 1:]
+        # Accept values that already carry the directory, in either the literal
+        # "Sounds/" form used in settings and sequences or a full path.
+        for prefix in (self.SOUND_DIR + os.sep, self.SOUND_DIR_NAME + '/'):
+            if filename.startswith(prefix):
+                filename = filename[len(prefix):]
+                break
         if filename == '' or filename in ['.', '..'] or filename.startswith('.'):
             return None
         if '/' in filename or '\\' in filename or path.isabs(filename):
@@ -233,7 +241,7 @@ class SoundManager:
         filename = self.normalizeSoundFilename(filename)
         if filename is None:
             return
-        for soundName in [filename, self.SOUND_DIR + '/' + filename]:
+        for soundName in [filename, self.SOUND_DIR_NAME + '/' + filename]:
             if soundName in self.sounds:
                 self.sounds.pop(soundName)
     

@@ -14,11 +14,10 @@ import os
 import shutil
 import tempfile
 
-# Absolute paths, so the app no longer depends on being started from the repo
-# root. Layout: <repo>/magicreader/jsonStore.py -> <repo>/data
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_DIR = os.path.dirname(APP_DIR)
-DATA_DIR = os.path.join(REPO_DIR, 'data')
+import appPaths
+
+# Absolute, so the app does not depend on being started from the repo root.
+DATA_DIR = appPaths.DATA_DIR
 
 DEFAULT_SUFFIX = '.default.json'
 BACKUP_SUFFIX = '.bak'

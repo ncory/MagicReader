@@ -1,4 +1,5 @@
 from enum import Enum
+import math
 from rest import RestQueue
 import time
 import socket
@@ -25,7 +26,7 @@ class ActionType(str, Enum):
 @dataclass
 class SequenceAction:
     type: ActionType
-    delay: int
+    delay: float
     url: str
     method: str
     data: any
@@ -70,6 +71,21 @@ class SequenceAction:
         return data
     
     @staticmethod
+    def coerceDelay(value):
+        """Returns a usable delay in seconds, or 0 if the value is unusable.
+
+        Delays may be fractional - lining a light cue up with a beat needs
+        better than one-second resolution. Whole numbers stay ints so existing
+        sequence files round-trip unchanged. bool is excluded explicitly
+        because bool is a subclass of int.
+        """
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0
+        if not math.isfinite(value) or value < 0:
+            return 0
+        return value
+
+    @staticmethod
     def createFromDict(data: dict):
         """Creates a SequenceAction object from a dictionary."""
         if not isinstance(data, dict):
@@ -78,9 +94,7 @@ class SequenceAction:
         # Create action object
         type = data.get('type', '')
         # Grab properties
-        delay = data.get('delay', 0)
-        if not isinstance(delay, int):
-            delay = 0
+        delay = SequenceAction.coerceDelay(data.get('delay', 0))
         url = data.get('url', None)
         if url is not None and not isinstance(url, str):
             url = None
@@ -138,20 +152,20 @@ class SequenceAction:
             return None
     
     @staticmethod
-    def new_action_delay(delay: int = 0):
+    def new_action_delay(delay: float = 0):
         action = SequenceAction(ActionType.Delay)
         action.delay = delay
         return action
 
     @staticmethod
-    def new_action_wled_internal(preset: int = 0, delay: int = 0):
+    def new_action_wled_internal(preset: int = 0, delay: float = 0):
         action = SequenceAction(ActionType.WLEDInternal)
         action.data = preset
         action.delay = delay
         return action
     
     @staticmethod
-    def new_action_wled_external(address: str = None, preset: int = 0, delay: int = 0):
+    def new_action_wled_external(address: str = None, preset: int = 0, delay: float = 0):
         action = SequenceAction(ActionType.WLEDExternal)
         action.address = address
         action.data = preset
@@ -159,21 +173,21 @@ class SequenceAction:
         return action
     
     @staticmethod
-    def new_action_sound_file(filename: str, delay: int = 0):
+    def new_action_sound_file(filename: str, delay: float = 0):
         action = SequenceAction(ActionType.SoundFile)
         action.data = filename
         action.delay = delay
         return action
 
     @staticmethod
-    def new_action_music_file(filename: str, delay: int = 0):
+    def new_action_music_file(filename: str, delay: float = 0):
         action = SequenceAction(ActionType.MusicFile)
         action.data = filename
         action.delay = delay
         return action
     
     @staticmethod
-    def new_action_url(url: str, method: str = "GET", data = None, delay: int = 0):
+    def new_action_url(url: str, method: str = "GET", data = None, delay: float = 0):
         action = SequenceAction(ActionType.URL)
         action.url = url
         action.method = method
@@ -182,7 +196,7 @@ class SequenceAction:
         return action
     
     @staticmethod
-    def new_action_brightsign(address: str, port: int, command: str, delay: int = 0):
+    def new_action_brightsign(address: str, port: int, command: str, delay: float = 0):
         action = SequenceAction(ActionType.BrightSign)
         action.address = address
         action.port = port
@@ -191,7 +205,7 @@ class SequenceAction:
         return action
     
     @staticmethod
-    def new_action_chromateq(address: str, port: int, command: str, delay: int = 0):
+    def new_action_chromateq(address: str, port: int, command: str, delay: float = 0):
         action = SequenceAction(ActionType.ChromaTeq)
         action.address = address
         action.port = port
@@ -200,7 +214,7 @@ class SequenceAction:
         return action
     
     @staticmethod
-    def new_action_magicband_broadcast(address:str, data: str, delay: int = 0):
+    def new_action_magicband_broadcast(address:str, data: str, delay: float = 0):
         action = SequenceAction(ActionType.MagicBandBroadcast)
         action.address = address
         action.data = data
@@ -208,7 +222,7 @@ class SequenceAction:
         return action
 
     @staticmethod
-    def new_action_gpio_closure(output_id: str, delay: int = 0):
+    def new_action_gpio_closure(output_id: str, delay: float = 0):
         action = SequenceAction(ActionType.GPIOClosure)
         action.data = output_id
         action.delay = delay

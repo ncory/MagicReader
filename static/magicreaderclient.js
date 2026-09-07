@@ -889,7 +889,7 @@ function addSequenceActionRow(action) {
     let type = getStringFromDict(action, 'type') || "url";
     let tr = $('<tr class="sequence-action-row">');
     tr.append($('<td class="sequence-action-type-cell">').append(createActionTypeSelect(type)));
-    tr.append($('<td class="sequence-action-delay-cell">').append($('<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" class="form-control form-control-sm action-delay">').val(getNumberFromDict(action, 'delay') || 0)));
+    tr.append($('<td class="sequence-action-delay-cell">').append($('<input type="text" inputmode="decimal" pattern="[0-9]*\\.?[0-9]*" maxlength="8" class="form-control form-control-sm action-delay" title="Seconds. Decimals allowed, e.g. 0.25">').val(getNumberFromDict(action, 'delay') || 0)));
     tr.append($('<td class="sequence-action-target-cell">').append($('<input type="text" class="form-control form-control-sm action-target">').val(getActionTarget(action))));
     tr.append($('<td class="sequence-action-value-cell">').append(createActionValueControl(action)));
     tr.append($('<td class="sequence-action-port-cell">').append($('<input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" class="form-control form-control-sm action-port">').val(getNumberFromDict(action, 'port'))));
@@ -1044,7 +1044,9 @@ function collectSequenceActions() {
 
 function buildActionFromRow(row) {
     let type = row.find('.action-type').val();
-    let delay = parseInt(row.find('.action-delay').val(), 10);
+    // Delays are seconds and may be fractional, so parseFloat not parseInt -
+    // a light cue lining up with a beat needs sub-second resolution.
+    let delay = parseFloat(row.find('.action-delay').val());
     if (!Number.isFinite(delay) || delay < 0) delay = 0;
     let target = row.find('.action-target').val();
     let value = row.find('.action-value').val();
