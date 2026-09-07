@@ -53,10 +53,17 @@ function getApiErrorMessage(response, fallback) {
 }
 
 function getAjaxErrorMessage(jqXHR, fallback) {
-    // The server answers errors with JSON even on non-2xx statuses (e.g. a 413
-    // when an upload is over the size limit) - prefer that over a generic message.
+    // The app answers errors with JSON even on non-2xx statuses - prefer that.
     if (jqXHR != null && isDict(jqXHR.responseJSON)) {
-        return getApiErrorMessage(jqXHR.responseJSON, fallback);
+        let message = getApiErrorMessage(jqXHR.responseJSON, null);
+        if (message != null) {
+            return message;
+        }
+    }
+    // An oversized upload is refused by the WSGI server before the app ever
+    // runs, so that response is plain text rather than our JSON.
+    if (jqXHR != null && jqXHR.status === 413) {
+        return "Upload is too large.";
     }
     return fallback;
 }

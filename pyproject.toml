@@ -12,10 +12,13 @@ authors = [
 description = "An RFID reader app for Raspberry Pi that replicates the functionality of Disney MagicBand readers."
 version = "0.0.1"
 requires-python = ">=3.11.2"
-dependencies =[
+dependencies = [
     "flask",
+    "waitress",
     "httplib2",
-    "RPi",
+    "RPi.GPIO",
+    "spidev",
+    "mfrc522",
     "pyserial",
     "pygame",
     "ordered_enum"

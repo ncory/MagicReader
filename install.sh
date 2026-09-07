@@ -5,8 +5,17 @@ set -euo pipefail
 
 ### CONFIG
 REPO_URL="https://github.com/ncory/MagicReader.git"
-TARGET_DIR="magicreader"
-VENV_NAME="magicreader/.venv"
+# Absolute, and based on the invoking user's home rather than a hardcoded
+# /home/pi - recent Raspberry Pi OS images ask for a username at flash time and
+# do not create a "pi" user by default.
+TARGET_DIR="$HOME/magicreader"
+VENV_NAME="$TARGET_DIR/.venv"
+
+if [ "$(id -u)" -eq 0 ]; then
+    echo "ERROR: run this installer as your normal user, not root." >&2
+    echo "It calls sudo itself where it needs to." >&2
+    exit 1
+fi
 
 # Enable SPI using raspi-config
 sudo raspi-config nonint do_spi 0
@@ -21,8 +30,8 @@ sudo apt-get install -y python3 python3-pip python3-venv python3-pygame git
 ##### Clone git repo to get source code
 git clone "$REPO_URL" "$TARGET_DIR"
 echo "Repository cloned successfully into $TARGET_DIR"
-# Change owner for rep folder
-sudo chown -R pi:pi "$TARGET_DIR"
+# Change owner for repo folder
+sudo chown -R "$(id -un):$(id -gn)" "$TARGET_DIR"
 
 ##### Create Python virtual environment
 echo "Creating Python virtual environment '$VENV_NAME'..."
@@ -36,11 +45,10 @@ source "$VENV_NAME/bin/activate"
 echo "Virtual environment activated."
 
 ##### Install PIP package requirements
-pip install RPi.GPIO pygame Flask httplib2 spidev ordered_enum mfrc522 pyserial
+pip install RPi.GPIO pygame Flask waitress httplib2 spidev ordered_enum mfrc522 pyserial
 
 ##### Install services
-cd "$TARGET_DIR"
-./service-install.sh --no-start
+"$TARGET_DIR/service-install.sh" --no-start
 
 ##### Finished
 echo "Finished installing MagicReader. Please reboot your Raspberry Pi to apply SPI changes; MagicReader will start automatically after reboot."

@@ -14,6 +14,7 @@ import json
 import shutil
 import zipfile
 import jsonStore
+import appPaths
 #import requests
 #from flask_restful import Api, Resource
 
@@ -45,6 +46,49 @@ def copyWithLimit(source, dest, limit: int):
         if written > limit:
             return None
         dest.write(chunk)
+
+
+def serveApp(app, port: int):
+    """Serves the Flask app, preferring waitress over the development server.
+
+    waitress runs in this process and thread, which is what this app needs: the
+    Flask views hold a reference to the single MagicBand instance running
+    alongside them, so a forking server like gunicorn cannot be used - its
+    workers would each get their own copy of the app state and none of them the
+    one driving the reader.
+
+    Falls back to Werkzeug if waitress is missing so an existing install that
+    has not run pip keeps working.
+    """
+    try:
+        from waitress import serve
+    except ImportError:
+        print(
+            "WARNING: waitress is not installed - falling back to the Werkzeug "
+            "development server. Install it with: pip install waitress",
+            flush=True
+        )
+        app.run(host="0.0.0.0", port=port, debug=False)
+        return
+    print(f"Serving web UI on port {port} with waitress", flush=True)
+    serve(
+        app,
+        host="0.0.0.0",
+        port=port,
+        # The status page polls once a second per open tab and PUT /bands/read
+        # holds a thread for up to 30s while it waits for a tap.
+        threads=8,
+        # Same ceiling as Flask's MAX_CONTENT_LENGTH, which this supersedes in
+        # practice: waitress buffers the request body before invoking the app,
+        # so it enforces the limit while reading and answers the 413 itself.
+        # Two consequences, both accepted. An oversized upload is only refused
+        # after roughly this many bytes have been transferred and spooled,
+        # where the Werkzeug development server rejected it up front on
+        # Content-Length. And the 413 body is waitress's plain text rather than
+        # our JSON, so the web client special-cases the status.
+        max_request_body_size=MAX_UPLOAD_BYTES,
+        ident="MagicReader"
+    )
 
 
 def RunMagicApi(magicreader: MagicBand, port=80):
@@ -477,20 +521,24 @@ def RunMagicApi(magicreader: MagicBand, port=80):
 
     @app.route('/control/shutdown', methods=['POST'])
     def control_shutdown():
-        os.system("nohup bash /home/pi/magicreader/soft-shutdown.sh &")
-        #os.system("sudo shutdown now")
+        # Resolve from the repo location rather than a hardcoded /home/pi, so
+        # this works whatever user the Pi was imaged with.
+        script = os.path.join(appPaths.REPO_DIR, "soft-shutdown.sh")
+        subprocess.Popen(
+            ["nohup", "bash", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True
+        )
         return {"result": "ok"}
 
     @app.route('/control/reboot', methods=['POST'])
     def control_reboot():
         os.system("sudo systemctl start MagicReboot.service")
-        #os.system("nohup bash /home/pi/magicreader/soft-reboot.sh &")
-        #os.system("sudo reboot")
         return {"result": "ok"}
 
     @app.route('/control/magicWand', methods=['POST'])
     def control_magicWand():
-        #os.system("/home/pi/magicreader/MagicWand.sh")
         os.system("sudo systemctl start MagicWand.service")
         return {"result": "ok"}
 
@@ -818,5 +866,5 @@ def RunMagicApi(magicreader: MagicBand, port=80):
 
     
 
-    # Run Flask app
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # Serve it
+    serveApp(app, port)

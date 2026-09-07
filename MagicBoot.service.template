@@ -1,0 +1,17 @@
+# Rendered by service-install.sh, which substitutes:
+#   @SERVICE_USER@  the user running the installer
+#   @SERVICE_UID@   that user's numeric uid
+#   @REPO_DIR@      the absolute path of this repository
+# Do not install this file directly - the placeholders are not valid systemd.
+[Unit]
+Description=Legacy MagicReader boot helper
+After=MagicReader.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=false
+User=@SERVICE_USER@
+ExecStart=@REPO_DIR@/MagicBoot.sh
+
+[Install]
+# MagicReader.service starts at boot directly.

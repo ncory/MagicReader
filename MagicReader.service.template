@@ -1,0 +1,26 @@
+# Rendered by service-install.sh, which substitutes:
+#   @SERVICE_USER@  the user running the installer
+#   @SERVICE_UID@   that user's numeric uid
+#   @REPO_DIR@      the absolute path of this repository
+# Do not install this file directly - the placeholders are not valid systemd.
+[Unit]
+Description=MagicReader
+Wants=network-online.target
+Wants=systemd-udev-settle.service
+After=network-online.target systemd-udev-settle.service sound.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+SupplementaryGroups=spi gpio audio
+# Allow the service user to bind the web server to port 80.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+WorkingDirectory=@REPO_DIR@
+Environment="XDG_RUNTIME_DIR=/run/user/@SERVICE_UID@"
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@REPO_DIR@/.venv/bin/python @REPO_DIR@/magicreader/__main__.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
