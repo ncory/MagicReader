@@ -17,7 +17,7 @@ import zipfile
 #from flask_restful import Api, Resource
 
 
-def RunMagicApi(magicreader: MagicBand, port=8000):
+def RunMagicApi(magicreader: MagicBand, port=80):
     # Create app
     app = Flask("MagicReaderApi")
     # Supress logging all the damn requests

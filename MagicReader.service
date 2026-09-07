@@ -8,6 +8,8 @@ After=network-online.target systemd-udev-settle.service sound.target
 Type=simple
 User=pi
 SupplementaryGroups=spi gpio audio
+# Allow the pi user to bind the web server to port 80.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 WorkingDirectory=/home/pi/magicreader
 Environment="XDG_RUNTIME_DIR=/run/user/1000"
 Environment=PYTHONUNBUFFERED=1
