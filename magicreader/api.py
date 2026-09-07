@@ -268,7 +268,7 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         if mode != "overwrite":
             settings_to_apply = magicreader.getSettings()
             settings_to_apply.update(backup_settings)
-        success, _ = magicreader.updateSettings(settings_to_apply)
+        success, _, _ = magicreader.updateSettings(settings_to_apply)
         return len(backup_settings) if success else None
 
     def restore_sounds(upload, mode):
@@ -352,30 +352,33 @@ def RunMagicApi(magicreader: MagicBand, port=80):
     
 
     ###### Control ######
+    # These all change state - some of them power the Pi off - so they are POST
+    # only. As GETs, any page on the network could fire them with an <img> tag
+    # pointing at this host.
 
-    @app.route('/control/blackout')
+    @app.route('/control/blackout', methods=['POST'])
     def control_blackout():
         magicreader.api_blackout()
         #magicreader.triggerBlackout()
         return {"result": "ok"}
     
-    @app.route('/control/wait')
+    @app.route('/control/wait', methods=['POST'])
     def control_wait():
         magicreader.api_waitForTap()
         #magicreader.triggerWaiting()
         return {"result": "ok"}
     
-    @app.route('/control/allowRead')
+    @app.route('/control/allowRead', methods=['POST'])
     def control_allowRead():
         magicreader.api_allowRead()
         return {"result": "ok"}
     
-    @app.route('/control/disableRead')
+    @app.route('/control/disableRead', methods=['POST'])
     def control_disableRead():
         magicreader.api_disableRead()
         return {"result": "ok"}
     
-    @app.route('/control/sequence/<seq_id>')
+    @app.route('/control/sequence/<seq_id>', methods=['POST'])
     def control_sequence(seq_id):
         success = False
         # Get matching sequence
@@ -388,25 +391,25 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         # Failed if we got here
         return {"result": "error"}
     
-    @app.route('/control/stopSequence')
+    @app.route('/control/stopSequence', methods=['POST'])
     def control_stopSequence():
         magicreader.api_stopSequence()
         return {"result": "ok"}
 
-    @app.route('/control/shutdown')
+    @app.route('/control/shutdown', methods=['POST'])
     def control_shutdown():
         os.system("nohup bash /home/pi/magicreader/soft-shutdown.sh &")
         #os.system("sudo shutdown now")
         return {"result": "ok"}
 
-    @app.route('/control/reboot')
+    @app.route('/control/reboot', methods=['POST'])
     def control_reboot():
         os.system("sudo systemctl start MagicReboot.service")
         #os.system("nohup bash /home/pi/magicreader/soft-reboot.sh &")
         #os.system("sudo reboot")
         return {"result": "ok"}
 
-    @app.route('/control/magicWand')
+    @app.route('/control/magicWand', methods=['POST'])
     def control_magicWand():
         #os.system("/home/pi/magicreader/MagicWand.sh")
         os.system("sudo systemctl start MagicWand.service")
@@ -432,11 +435,14 @@ def RunMagicApi(magicreader: MagicBand, port=80):
             request_data = request.get_json()
             if request_data is not None and isinstance(request_data, dict):
                 request_settings = request_data.get('settings', request_data)
-                success, restart_required = magicreader.updateSettings(request_settings)
+                success, restart_required, message = magicreader.updateSettings(request_settings)
                 if success:
                     result = get_settings()
                     result["restartRequired"] = restart_required
                     return result
+                # Pass the validation reason back so the UI can show why the
+                # save was rejected instead of a bare "error".
+                return {"result": "error", "data": {"message": message}}
         except Exception as e:
             print(f"ERROR saving settings: {e}", flush=True)
         return {"result": "error"}

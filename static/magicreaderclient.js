@@ -41,6 +41,17 @@ function getDataFromSuccessfulApiResponse(response, success="ok") {
     return null;
 }
 
+function getApiErrorMessage(response, fallback) {
+    // Error responses carry {"result": "error", "data": {"message": "..."}}
+    if (isDict(response) && isDict(response.data)) {
+        let message = response.data.message;
+        if (isString(message) && message !== '') {
+            return message;
+        }
+    }
+    return fallback;
+}
+
 function getStringFromDict(dict, key) {
     if (dict.hasOwnProperty(key)) {
         let val = dict[key];
@@ -353,35 +364,35 @@ function makeUploadApiCall(endpoint, formData, callback_success=null, callback_e
 /////// Control Functions ///////
 
 function controlBlackout() {
-    makeApiCall('/control/blackout');
+    makeApiCall('/control/blackout', 'POST');
 }
 
 function controlWait() {
-    makeApiCall('/control/wait');
+    makeApiCall('/control/wait', 'POST');
 }
 
 function controlStopSequence() {
-    makeApiCall('/control/stopSequence');
+    makeApiCall('/control/stopSequence', 'POST');
 }
 
 function controlAllowRead() {
-    makeApiCall('/control/allowRead');
+    makeApiCall('/control/allowRead', 'POST');
 }
 
 function controlDisableRead() {
-    makeApiCall('/control/disableRead');
+    makeApiCall('/control/disableRead', 'POST');
 }
 
 function controlShutdown() {
-    makeApiCall('/control/shutdown');
+    makeApiCall('/control/shutdown', 'POST');
 }
 
 function controlReboot() {
-    makeApiCall('/control/reboot');
+    makeApiCall('/control/reboot', 'POST');
 }
 
 function controlMagicWand() {
-    makeApiCall('/control/magicWand');
+    makeApiCall('/control/magicWand', 'POST');
 }
 
 function playSequence(element) {
@@ -389,7 +400,7 @@ function playSequence(element) {
     let sequence = element.dataset.sequence
     console.debug('sequence: ' + sequence);
     // Call API
-    makeApiCall('/control/sequence/' + sequence);
+    makeApiCall('/control/sequence/' + encodeURIComponent(sequence), 'POST');
 }
 
 
@@ -1283,7 +1294,9 @@ function buttonSaveSettings() {
                 }
                 $('#settingsSaveStatus').text(message);
             } else {
-                $('#settingsSaveStatus').text("Failed to save settings.");
+                // The server explains why validation failed (e.g. an
+                // unusable GPIO pin) - show that instead of a bare failure.
+                $('#settingsSaveStatus').text(getApiErrorMessage(response, "Failed to save settings."));
             }
             setSaveSettingsButtonEnabled(true);
         },

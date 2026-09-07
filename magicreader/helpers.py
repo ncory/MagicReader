@@ -40,3 +40,8 @@ class AppEvent():
 
 class CancelReadException(Exception):
     pass
+
+
+class SettingValueError(Exception):
+    """A settings value failed validation. The message is shown to the user."""
+    pass

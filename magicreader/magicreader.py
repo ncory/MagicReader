@@ -15,7 +15,7 @@ import threading
 import queue
 #import datetime
 from functools import total_ordering
-from helpers import State, AppEvent, AppEventType#, CancelReadException
+from helpers import State, AppEvent, AppEventType, SettingValueError#, CancelReadException
 from bandManager import BandManager
 from sequenceManager import SequenceManager
 from soundManager import SoundManager
@@ -139,6 +139,17 @@ SETTINGS_SCHEMA = [
         "section": "GPIO"
     }
 ]
+
+# The RFID reader's reset pin is defined in rfid_mfrc522 but has to be excluded
+# from the pins offered as GPIO outputs. Catch the two drifting apart here
+# rather than discovering it when a sequence kills the reader.
+if RfidMfrc522.RESET_PIN not in GPIOManager.RESERVED_PINS:
+    print(
+        f"WARNING: MFRC522 reset pin {RfidMfrc522.RESET_PIN} is not in "
+        f"GPIOManager.RESERVED_PINS {sorted(GPIOManager.RESERVED_PINS)} - "
+        "it could be assigned as a GPIO output and break the reader",
+        flush=True
+    )
 
 # Setup logging
 log = logging.getLogger('main')
@@ -353,12 +364,14 @@ class MagicBand():
                 if not isinstance(output_id, str) or output_id.strip() == '' or output_id.strip() in seen_ids:
                     return False, None
                 seen_ids.add(output_id.strip())
-                try:
-                    pin = int(output.get("pin"))
-                except Exception:
-                    return False, None
-                if pin < 1 or pin > 40:
-                    return False, None
+                pin = output.get("pin")
+                # Reject power, ground, EEPROM and RFID-reader pins outright -
+                # driving a supply rail as an output is a short, and taking an
+                # SPI or reset pin would break the MFRC522.
+                invalid_reason = GPIOManager.describeInvalidPin(pin)
+                if invalid_reason is not None:
+                    raise SettingValueError(f"GPIO output '{output_id.strip()}': {invalid_reason}")
+                pin = int(pin)
                 trigger_state = output.get("trigger_state")
                 if not isinstance(trigger_state, str) or trigger_state.strip().upper() not in ["HIGH", "LOW"]:
                     return False, None
@@ -373,8 +386,9 @@ class MagicBand():
         return False, None
 
     def updateSettings(self, request_settings: dict):
+        """Validates and persists settings. Returns (success, restart_required, message)."""
         if request_settings is None or not isinstance(request_settings, dict):
-            return False, False
+            return False, False, "No settings provided"
         global settings, print_band_id
         old_settings = dict(settings)
         updated_settings = {}
@@ -382,10 +396,14 @@ class MagicBand():
         for field in SETTINGS_SCHEMA:
             key = field.get("key")
             if key in request_settings:
-                valid, value = self.coerceSettingValue(field, request_settings.get(key))
+                try:
+                    valid, value = self.coerceSettingValue(field, request_settings.get(key))
+                except SettingValueError as e:
+                    print(f"Invalid setting value for {key}: {e}", flush=True)
+                    return False, False, str(e)
                 if not valid:
                     print(f"Invalid setting value for {key}: {request_settings.get(key)}", flush=True)
-                    return False, False
+                    return False, False, f"Invalid value for {field.get('label', key)}"
                 updated_settings[key] = value
             elif key in settings:
                 updated_settings[key] = settings[key]
@@ -395,9 +413,12 @@ class MagicBand():
             if key not in updated_settings:
                 updated_settings[key] = value
         if not jsonStore.saveJsonAtomic(SETTINGS_FILE, {"settings": updated_settings}):
-            return False, False
-        settings.clear()
-        settings.update(updated_settings)
+            return False, False, "Could not save settings to disk"
+        # Rebind rather than clear()+update(). Mutating in place left a window
+        # where the dict was empty, so a reader on the event or sequence thread
+        # could hit a KeyError mid-save. Rebinding is a single atomic name
+        # swap: every reader sees either the old dict or the new one.
+        settings = updated_settings
         config['settings'] = settings
         print_band_id = bool(settings.get('print_band_id'))
         self.wledManager.address = settings.get('wled_address')
@@ -405,7 +426,7 @@ class MagicBand():
         self.gpioManager.configureOutputs(settings.get('gpio_outputs', []))
         if self.is_active:
             self.resetInactiveTimer()
-        return True, restart_required
+        return True, restart_required, None
 
 
     ######### Inactivity Timer #########
