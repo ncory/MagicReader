@@ -1,0 +1,22 @@
+{
+    "welcome": {
+        "name": "Welcome",
+        "cancel_allowed": true,
+        "actions": [
+            {
+                "type": "soundFile",
+                "data": "Tap In - Generic.wav",
+                "delay": 0
+            },
+            {
+                "type": "wledInternal",
+                "data": 5,
+                "delay": 0
+            },
+            {
+                "type": "delay",
+                "delay": 5
+            }
+        ]
+    }
+}

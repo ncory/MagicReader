@@ -13,6 +13,7 @@ import io
 import json
 import shutil
 import zipfile
+import jsonStore
 #import requests
 #from flask_restful import Api, Resource
 
@@ -445,15 +446,15 @@ def RunMagicApi(magicreader: MagicBand, port=80):
 
     @app.route('/backup/bands')
     def backup_bands():
-        return make_json_backup_response("bands", load_json_file('data/bands.json'))
+        return make_json_backup_response("bands", load_json_file(jsonStore.dataPath('bands.json')))
 
     @app.route('/backup/sequences')
     def backup_sequences():
-        return make_json_backup_response("sequences", load_json_file('data/sequences.json'))
+        return make_json_backup_response("sequences", load_json_file(jsonStore.dataPath('sequences.json')))
 
     @app.route('/backup/settings')
     def backup_settings():
-        return make_json_backup_response("settings", load_json_file('data/settings.json'))
+        return make_json_backup_response("settings", load_json_file(jsonStore.dataPath('settings.json')))
 
     @app.route('/backup/sounds')
     def backup_sounds():

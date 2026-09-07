@@ -1,8 +1,9 @@
-import json
+import jsonStore
 import random
 #import re
 
 class BandManager:
+    FILENAME = 'bands.json'
 
     def __init__(self):
         self.bands = {}
@@ -104,31 +105,21 @@ class BandManager:
 ######### File Access #########
 
     def loadFromFile(self):
-        try:
-            # Load json file
-            with open('data/bands.json', 'r') as file:
-                data = json.load(file)
-                # Validate loaded object
-                if data is not None and isinstance(data, dict):
-                    # Cache as our bands dict
-                    self.bands = data
-                    return True
-        except:
-            print("ERROR loading bands.json", flush=True)
+        # Create the runtime file from the shipped default if this is a fresh install
+        jsonStore.seedDataFileFromDefault(BandManager.FILENAME)
+        # Load json file (falls back to the .bak copy if the main file is corrupt)
+        data = jsonStore.loadJson(jsonStore.dataPath(BandManager.FILENAME))
+        # Validate loaded object
+        if data is not None and isinstance(data, dict):
+            # Cache as our bands dict
+            self.bands = data
+            return True
+        print("ERROR loading bands.json", flush=True)
         # If we got here we failed
         return False
 
     def saveToFile(self):
-        try:
-            # Save as json to file
-            with open('data/bands.json', 'w') as file:
-                json.dump(self.bands, file)
-                return True
-        except:
-            print("ERROR saving bands.json", flush=True)
-            pass
-        # If we got here we failed
-        return False
+        return jsonStore.saveJsonAtomic(jsonStore.dataPath(BandManager.FILENAME), self.bands)
     
 
     ######### Is Disney Band #########

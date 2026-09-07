@@ -57,3 +57,14 @@ __pycache__/
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# MagicReader runtime data #
+############################
+# These are rewritten by the web UI on every edit. Tracking them meant any
+# commit touching data/ collided with local changes on every deployed Pi.
+# The repo ships *.default.json templates; the app copies them into place on
+# first run (see magicreader/jsonStore.py).
+/data/*.json
+!/data/*.default.json
+/data/*.bak
+/data/.tmp-*

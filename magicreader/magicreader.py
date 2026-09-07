@@ -25,6 +25,7 @@ from sequence import Sequence
 from wled import WLEDManager
 from rest import RestQueue
 from gpioManager import GPIOManager
+import jsonStore
 
 print("Starting...", flush=True)
 
@@ -32,15 +33,19 @@ print("Starting...", flush=True)
 if sys.version_info.major < 3:
     sys.exit("This script requires Python 3")
 
-# Read config file
-with open('data/settings.json', 'r') as file:
-    data = json.load(file)
+# Read config file. Seed it from the shipped default first, since the runtime
+# data files are not tracked in git.
+SETTINGS_FILENAME = 'settings.json'
+SETTINGS_FILE = jsonStore.dataPath(SETTINGS_FILENAME)
+jsonStore.seedDataFileFromDefault(SETTINGS_FILENAME)
+data = jsonStore.loadJson(SETTINGS_FILE)
+if data is None or not isinstance(data, dict) or 'settings' not in data:
+    sys.exit(f"FATAL: Could not read settings from {SETTINGS_FILE}")
 config = data
 settings = config['settings']
 print_band_id = bool(settings['print_band_id'])
 #bands = config['bands']
 #sequences = config['sequences']
-SETTINGS_FILE = 'data/settings.json'
 SETTINGS_SCHEMA = [
     {
         "key": "print_band_id",
@@ -389,12 +394,7 @@ class MagicBand():
         for key, value in settings.items():
             if key not in updated_settings:
                 updated_settings[key] = value
-        try:
-            with open(SETTINGS_FILE, 'w') as file:
-                json.dump({"settings": updated_settings}, file, indent=4)
-                file.write('\n')
-        except Exception as e:
-            print(f"ERROR saving settings: {e}", flush=True)
+        if not jsonStore.saveJsonAtomic(SETTINGS_FILE, {"settings": updated_settings}):
             return False, False
         settings.clear()
         settings.update(updated_settings)

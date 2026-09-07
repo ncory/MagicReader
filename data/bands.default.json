@@ -1,0 +1,10 @@
+{
+    "disney": {
+        "name": "Disney MagicBands",
+        "sequences": ["welcome"]
+    },
+    "unknown": {
+        "name": "Unknown Bands",
+        "sequences": ["welcome"]
+    }
+}

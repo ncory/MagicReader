@@ -1,9 +1,10 @@
-import json
+import jsonStore
 from sequence import Sequence
 from sequenceAction import ActionType, SequenceAction
 from soundManager import SoundManager
 
 class SequenceManager:
+    FILENAME = 'sequences.json'
 
     def __init__(self):
         self.sequences = {}
@@ -12,28 +13,28 @@ class SequenceManager:
 ######### File Access #########
 
     def loadFromFile(self):
-        try:
-            # Load from json file
-            with open('data/sequences.json', 'r') as file:
-                data = json.load(file)
-                # Validate loaded object
-                if data is not None and isinstance(data, dict):
-                    # Iterate dictionary and create Sequence objects
-                    for id, sequence_data in data.items():
-                        if isinstance(sequence_data, dict):
-                            sequence = Sequence.createFromDict(sequence_data, id)
-                            if sequence is not None:
-                                # Store in sequences dict
-                                self.sequences[id] = sequence
-                        else:
-                            print(f"Invalid sequence data for ID {id}", flush=True)
-                    # If we got here, we successfully loaded sequences
-                    print(f"Loaded {len(self.sequences)} sequences from file", flush=True)
-                    return True
-        except Exception as e:
-            print(f"ERROR while loading sequences: {e}", flush=True)
-        # If we got here we failed
-        return False
+        # Create the runtime file from the shipped default if this is a fresh install
+        jsonStore.seedDataFileFromDefault(SequenceManager.FILENAME)
+        # Load from json file (falls back to the .bak copy if the main file is corrupt)
+        data = jsonStore.loadJson(jsonStore.dataPath(SequenceManager.FILENAME))
+        # Validate loaded object
+        if data is None or not isinstance(data, dict):
+            print("ERROR while loading sequences", flush=True)
+            return False
+        # Replace rather than merge, so a reload never keeps deleted sequences
+        self.sequences = {}
+        # Iterate dictionary and create Sequence objects
+        for id, sequence_data in data.items():
+            if isinstance(sequence_data, dict):
+                sequence = Sequence.createFromDict(sequence_data, id)
+                if sequence is not None:
+                    # Store in sequences dict
+                    self.sequences[id] = sequence
+            else:
+                print(f"Invalid sequence data for ID {id}", flush=True)
+        # If we got here, we successfully loaded sequences
+        print(f"Loaded {len(self.sequences)} sequences from file", flush=True)
+        return True
 
     def preCacheSoundFiles(self, soundManager: SoundManager):
         """Preloads SoundFile sequence actions into the sound manager cache."""
@@ -63,20 +64,11 @@ class SequenceManager:
         return True
 
     def saveToFile(self):
-        try:
-            # Save as json to file
-            with open('data/sequences.json', 'w') as file:
-                data = {}
-                for id, sequence in self.sequences.items():
-                    if isinstance(sequence, Sequence):
-                        data[id] = sequence.toDict()
-                json.dump(data, file, indent=4)
-                return True
-        except:
-            print("ERROR saving sequences.json", flush=True)
-            pass
-        # If we got here we failed
-        return False
+        data = {}
+        for id, sequence in self.sequences.items():
+            if isinstance(sequence, Sequence):
+                data[id] = sequence.toDict()
+        return jsonStore.saveJsonAtomic(jsonStore.dataPath(SequenceManager.FILENAME), data)
 
 
 ######### Accessors #########
