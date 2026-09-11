@@ -67,6 +67,36 @@ render_unit MagicBoot.service
 # Units that only call systemctl and need no substitution.
 sudo install -m 0644 "$REPO_DIR/MagicWand.service" "$SERVICE_DIR/MagicWand.service"
 sudo install -m 0644 "$REPO_DIR/MagicReboot.service" "$SERVICE_DIR/MagicReboot.service"
+sudo install -m 0644 "$REPO_DIR/MagicShutdown.service" "$SERVICE_DIR/MagicShutdown.service"
+
+##### Let the web UI restart, reboot and shut the Pi down
+# The app runs as an unprivileged user, so the System menu needs sudo for three
+# specific systemctl calls. Raspberry Pi OS through Bookworm shipped blanket
+# passwordless sudo for the first user (/etc/sudoers.d/010_pi-nopasswd);
+# Trixie does not, which is why those buttons silently did nothing there - every
+# sudo call was waiting for a password that no one could type.
+#
+# Rather than restore blanket sudo, grant exactly these three unit starts and
+# nothing else. They are the same actions the System menu already offers.
+SUDOERS_FILE="/etc/sudoers.d/magicreader"
+SUDOERS_TEMP="$(mktemp)"
+trap 'rm -f "$SUDOERS_TEMP"' EXIT
+cat > "$SUDOERS_TEMP" <<EOF
+# Installed by MagicReader's service-install.sh. Lets $SERVICE_USER trigger the
+# System menu actions in the web UI without a password. Nothing else is granted.
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start MagicWand.service
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start MagicReboot.service
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl start MagicShutdown.service
+EOF
+# Never install a sudoers file without checking it first - a syntax error there
+# can lock the machine out of sudo entirely.
+if ! sudo visudo -cqf "$SUDOERS_TEMP"; then
+    echo "ERROR: generated sudoers file is invalid; not installing it." >&2
+    sudo visudo -cf "$SUDOERS_TEMP" >&2 || true
+    exit 1
+fi
+sudo install -m 0440 -o root -g root "$SUDOERS_TEMP" "$SUDOERS_FILE"
+echo "Installed $SUDOERS_FILE for $SERVICE_USER"
 
 # Reload systemd to recognize the services.
 sudo systemctl daemon-reload

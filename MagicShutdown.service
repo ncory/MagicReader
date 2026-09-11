@@ -1,0 +1,12 @@
+[Unit]
+Description=Shut down MagicReader Pi
+After=MagicReader.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=false
+ExecStartPre=/usr/bin/systemctl stop MagicReader.service
+ExecStart=/usr/bin/systemctl poweroff
+
+[Install]
+# Started on demand by the web UI.

@@ -55,6 +55,25 @@ being HDMI rather than the headphone jack - the log shows both. To force ALSA,
 uncomment `SDL_AUDIODRIVER=alsa` in `MagicReader.service.template` and re-run
 `service-install.sh`.
 
+## System menu: restart, reboot, shutdown
+These run as separate systemd units (`MagicWand`, `MagicReboot`, `MagicShutdown`)
+rather than as scripts spawned by the app. A process the app spawns lives in
+`MagicReader.service`'s cgroup, so the `systemctl stop MagicReader.service` such
+a script has to run first kills the script itself before it gets any further -
+systemd's default `KillMode` is `control-group`. A separate unit gets its own
+cgroup and survives.
+
+The app runs unprivileged, so `service-install.sh` installs
+`/etc/sudoers.d/magicreader` granting the service user passwordless sudo for
+exactly those three `systemctl start` calls and nothing else.
+
+**On Trixie, run `./service-install.sh` yourself and type your password when
+asked.** Raspberry Pi OS through Bookworm gave the first user blanket
+passwordless sudo; Trixie does not, so the installer cannot grant itself the
+access it needs - it needs one password from you, once. Until then the System
+menu buttons return `ok` and do nothing, because every `sudo` behind them is
+waiting for a password nobody can type.
+
 ## Tests
 ```
 ./tests/run.sh              # or: PYTHON=.venv/bin/python ./tests/run.sh

@@ -517,15 +517,14 @@ def RunMagicApi(magicreader: MagicBand, port=80):
 
     @app.route('/control/shutdown', methods=['POST'])
     def control_shutdown():
-        # Resolve from the repo location rather than a hardcoded /home/pi, so
-        # this works whatever user the Pi was imaged with.
-        script = os.path.join(appPaths.REPO_DIR, "soft-shutdown.sh")
-        subprocess.Popen(
-            ["nohup", "bash", script],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True
-        )
+        # Hand this to systemd as its own unit rather than spawning a script.
+        # A process started from here lives in MagicReader.service's cgroup, so
+        # the "systemctl stop MagicReader.service" that such a script has to run
+        # first kills the script itself before it reaches poweroff - systemd's
+        # default KillMode is control-group. A separate unit gets its own
+        # cgroup and survives, which is why reboot already worked and shutdown
+        # never did.
+        os.system("sudo systemctl start MagicShutdown.service")
         return {"result": "ok"}
 
     @app.route('/control/reboot', methods=['POST'])
