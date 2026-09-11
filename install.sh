@@ -31,8 +31,17 @@ sudo apt-get install -y python3 python3-pip python3-venv git
 sudo apt-get install -y python3-pygame || echo "python3-pygame unavailable - continuing (pygame is installed via pip)"
 
 ##### Clone git repo to get source code
-git clone "$REPO_URL" "$TARGET_DIR"
-echo "Repository cloned successfully into $TARGET_DIR"
+# Skip if it is already there, so this script can be re-run after a failure
+# partway through without having to delete everything first.
+if [ -d "$TARGET_DIR/.git" ]; then
+    echo "Repository already present at $TARGET_DIR - leaving it alone"
+elif [ -e "$TARGET_DIR" ]; then
+    echo "ERROR: $TARGET_DIR exists but is not a git checkout. Move it aside and re-run." >&2
+    exit 1
+else
+    git clone "$REPO_URL" "$TARGET_DIR"
+    echo "Repository cloned successfully into $TARGET_DIR"
+fi
 # Change owner for repo folder
 sudo chown -R "$(id -un):$(id -gn)" "$TARGET_DIR"
 
@@ -70,8 +79,27 @@ else
 fi
 echo "GPIO backend: $GPIO_PACKAGE ($GPIO_REASON)"
 
+# rpi-lgpio pulls in the lgpio package, which ships no prebuilt wheel for
+# aarch64 - pip compiles it, which needs swig to generate the bindings and the
+# lgpio C library to link against. Without these the build fails with
+# "command 'swig' failed" and then "cannot find -llgpio".
+if [ "$GPIO_PACKAGE" = "rpi-lgpio" ]; then
+    echo "Installing build dependencies for lgpio..."
+    sudo apt-get install -y swig liblgpio-dev
+fi
+
 ##### Install PIP package requirements
-pip install "$GPIO_PACKAGE" pygame Flask waitress httplib2 spidev ordered_enum mfrc522 pyserial
+pip install "$GPIO_PACKAGE" pygame Flask waitress httplib2 spidev ordered_enum pyserial
+
+# mfrc522 declares install_requires = ["RPi.GPIO", "spidev"]. Installing it
+# normally would therefore drag in the classic RPi.GPIO alongside rpi-lgpio,
+# and the two cannot coexist - both provide a module named RPi.GPIO, so the
+# second to install silently clobbers the first. Install it without its
+# dependencies; spidev is installed above, and the GPIO package chosen above
+# provides the RPi.GPIO module it actually imports. pip will warn that
+# "mfrc522 requires RPi.GPIO, which is not installed" - that warning is
+# expected and wrong, since it checks distribution names, not module names.
+pip install --no-deps mfrc522
 
 ##### Confirm the GPIO backend actually imports before going further
 if ! python -c "import RPi.GPIO" 2>/dev/null; then

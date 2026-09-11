@@ -54,3 +54,22 @@ connecting to a sound server the service cannot reach, and the default device
 being HDMI rather than the headphone jack - the log shows both. To force ALSA,
 uncomment `SDL_AUDIODRIVER=alsa` in `MagicReader.service.template` and re-run
 `service-install.sh`.
+
+## Tests
+```
+./tests/run.sh              # or: PYTHON=.venv/bin/python ./tests/run.sh
+```
+Standard library only - no test dependency to install - and every
+hardware-facing module is stubbed, so the suite is **safe to run on a reader
+that is currently driving a show**: it never claims a GPIO pin or opens the
+audio device. It runs the same on a laptop with none of the Pi packages
+installed.
+
+Add `-v` for per-test names, or `MAGICREADER_TEST_VERBOSE=1` to also see the
+app's own log output, which is otherwise suppressed so failures stay readable.
+
+What it covers: the RestQueue singleton and its shutdown drain, crash-safe JSON
+writes and backup recovery, GPIO pin validation, sequence parsing and
+fractional delays, Disney band detection, sound path resolution, the event
+loop's exception guard, and that the shipped default data files are
+self-consistent.

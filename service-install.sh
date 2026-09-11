@@ -71,11 +71,10 @@ sudo install -m 0644 "$REPO_DIR/MagicReboot.service" "$SERVICE_DIR/MagicReboot.s
 # Reload systemd to recognize the services.
 sudo systemctl daemon-reload
 
-# MagicReader runs at boot. Helper services are started on demand.
+# MagicReader runs at boot. The helpers are started on demand by the web UI and
+# have no [Install] section, so they cannot be enabled and need no disabling -
+# calling systemctl disable on them just prints a wall of explanation.
 sudo systemctl enable MagicReader.service
-sudo systemctl disable MagicBoot.service || true
-sudo systemctl disable MagicWand.service || true
-sudo systemctl disable MagicReboot.service || true
 
 if [ "$START_SERVICE" = "true" ]; then
     sudo systemctl restart MagicReader.service
