@@ -87,6 +87,9 @@ installed.
 Add `-v` for per-test names, or `MAGICREADER_TEST_VERBOSE=1` to also see the
 app's own log output, which is otherwise suppressed so failures stay readable.
 
+Shell tests (`test_*.sh`) run too - `unittest` cannot discover them, so the
+runner invokes them explicitly.
+
 What it covers: the RestQueue singleton and its shutdown drain, crash-safe JSON
 writes and backup recovery, GPIO pin validation, sequence parsing and
 fractional delays, Disney band detection, sound path resolution, the event
