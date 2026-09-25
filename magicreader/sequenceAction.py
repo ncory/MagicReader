@@ -1,8 +1,7 @@
 from enum import Enum
 import math
 import re
-from rest import RestQueue, UnreachableHosts
-from hostResolver import HostResolver
+from rest import RestQueue
 import time
 import socket
 from wled import WLEDManager
@@ -386,11 +385,6 @@ class SequenceAction:
         if self.command is None or not isinstance(self.command, str):
             print("Invalid BrightSign command", flush=True)
             return False
-        # Unlike the REST actions this sends inline, on the sequence thread, so
-        # an address that does not resolve stalls the whole sequence - sounds
-        # included. Skip a host that just failed.
-        if UnreachableHosts.shouldSkip(self.address):
-            return False
         # Perform the action
         print(f"Performing BrightSign action: {self.command} to {self.address}:{self.port}", flush=True)
         try:
@@ -399,15 +393,10 @@ class SequenceAction:
             #print(f"Message as bytes: {data}")
             # Send bytes over UDP
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # sendto resolves inline, on this thread. Use the cached address
-            # when there is one so a flapping name cannot stall the sequence.
-            sock.sendto(data, (HostResolver.addressFor(self.address) or self.address,
-                               self.port))
+            sock.sendto(data, (self.address, self.port))
         except Exception as e:
             print(f"Error sending BrightSign command: {e}", flush=True)
-            UnreachableHosts.recordFailure(self.address, e)
             return False
-        UnreachableHosts.recordSuccess(self.address)
         # Success
         print("Finished sending BrightSign command", flush=True)
         return True
@@ -422,11 +411,6 @@ class SequenceAction:
         if self.command is None or not isinstance(self.command, str):
             print("Invalid ChromaTeq command", flush=True)
             return False
-        # Unlike the REST actions this sends inline, on the sequence thread, so
-        # an address that does not resolve stalls the whole sequence - sounds
-        # included. Skip a host that just failed.
-        if UnreachableHosts.shouldSkip(self.address):
-            return False
         # Perform the action
         print(f"Performing ChromaTeq action: {self.command} to {self.address}:{self.port}", flush=True)
         try:
@@ -435,15 +419,10 @@ class SequenceAction:
             #print(f"Message as bytes: {data}")
             # Send bytes over UDP
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # sendto resolves inline, on this thread. Use the cached address
-            # when there is one so a flapping name cannot stall the sequence.
-            sock.sendto(data, (HostResolver.addressFor(self.address) or self.address,
-                               self.port))
+            sock.sendto(data, (self.address, self.port))
         except Exception as e:
             print(f"Error sending ChromaTeq command: {e}", flush=True)
-            UnreachableHosts.recordFailure(self.address, e)
             return False
-        UnreachableHosts.recordSuccess(self.address)
         # Done
         print("Finished sending ChromaTeq command", flush=True)
         return True

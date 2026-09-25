@@ -15,7 +15,6 @@ from rfid import RfidRead
 from rfid_mfrc522 import RfidMfrc522
 from sequence import Sequence
 from wled import WLEDManager
-from hostResolver import HostResolver
 from rest import RestQueue
 from gpioManager import GPIOManager
 import jsonStore
@@ -198,17 +197,6 @@ class MagicBand():
             print("ERROR: Failed to load sequences from file", flush=True)
             return False
         self.sequence_manager.preCacheSoundFiles(self.soundManager)
-        # Warm the resolver before the first tap, then keep it warm in the
-        # background. A cue must never wait on a name - see hostResolver.py
-        hosts = self.sequence_manager.collectHostNames()
-        if isinstance(settings.get('wled_address'), str):
-            hosts.add(settings['wled_address'])
-        # Remembered addresses first, so the app comes up warm even when mDNS
-        # is not answering yet, then register the names and keep them fresh
-        HostResolver.loadCache()
-        HostResolver.primeFrom(hosts)
-        HostResolver.start()
-        print(f"Resolver warming {len(hosts)} device name(s)", flush=True)
         # Set active flag
         self.is_active = True
         # Start RFID reader
@@ -263,9 +251,6 @@ class MagicBand():
         self.wledManager.callLedPreset(settings['wled_preset_black'])
         # Stop REST queue (drains the blackout call above before exiting)
         RestQueue().shutdown()
-        # The refresher may be inside a 5s lookup, so do not wait on it. It is
-        # a daemon thread and the cache is only memory.
-        HostResolver.stop(timeout=0.5)
         # Stop all sound
         self.soundManager.stopAllSounds()
         # Cleanup GPIO
