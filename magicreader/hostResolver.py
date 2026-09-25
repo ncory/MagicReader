@@ -25,6 +25,8 @@ import socket
 import threading
 import time
 
+import jsonStore
+
 
 class HostResolver:
     # How often to re-resolve every known name. Also how quickly a device that
@@ -43,6 +45,7 @@ class HostResolver:
     _thread = None
     _wake = threading.Event()
     _running = False
+    _persist = True
 
     # --- registration ----------------------------------------------------
     @staticmethod
@@ -146,15 +149,18 @@ class HostResolver:
         with HostResolver._lock:
             entry = HostResolver._entries.get(host)
             if entry is None:
-                return
+                return False
             if ip is not None:
                 was = entry["ip"]
-                if was != ip:
+                changed = was != ip
+                if changed:
                     print(f"Resolved {host} -> {ip}"
                           + (f" (was {was})" if was else ""), flush=True)
                 entry["ip"] = ip
                 entry["at"] = time.monotonic()
                 entry["failures"] = 0
+                entry.pop("fromCache", None)
+                return changed
             else:
                 entry["failures"] += 1
                 # Say so once, not on every sweep, and only while there is
@@ -162,6 +168,7 @@ class HostResolver:
                 if entry["failures"] == 1 and entry["ip"] is None:
                     print(f"Could not resolve {host} - cues to it will wait "
                           "on the system resolver until it answers", flush=True)
+                return False
 
     @staticmethod
     def refreshOnce():
@@ -181,8 +188,14 @@ class HostResolver:
         with concurrent.futures.ThreadPoolExecutor(
                 max_workers=workers, thread_name_prefix="resolve") as pool:
             results = list(pool.map(HostResolver._lookup, hosts))
+        changed = False
         for host, ip in zip(hosts, results):
-            HostResolver._record(host, ip)
+            if HostResolver._record(host, ip):
+                changed = True
+        # Only on a change: this runs every REFRESH_INTERVAL forever, and the
+        # data directory is on an SD card
+        if changed and HostResolver._persist:
+            HostResolver.saveCache()
 
     @staticmethod
     def _run():
@@ -226,3 +239,53 @@ class HostResolver:
         """A copy of what is cached, for the API and for tests."""
         with HostResolver._lock:
             return {h: dict(e) for h, e in HostResolver._entries.items()}
+
+    # --- persistence -----------------------------------------------------
+    # A resolver that forgets everything on restart is no use on a network
+    # where mDNS may simply not answer for minutes at a time: the app would
+    # come up cold and pay full price for every cue until some sweep happened
+    # to succeed. Observed on hm4 - a whole sweep resolved nothing.
+    CACHE_FILENAME = 'resolver-cache.json'
+
+    @staticmethod
+    def cachePath():
+        return jsonStore.dataPath(HostResolver.CACHE_FILENAME)
+
+    @staticmethod
+    def loadCache(path = None):
+        """Seeds the cache from the last run. Returns how many were loaded."""
+        data = jsonStore.loadJson(path or HostResolver.cachePath())
+        if not isinstance(data, dict):
+            return 0
+        loaded = 0
+        now = time.monotonic()
+        for host, record in data.items():
+            if not isinstance(host, str) or not isinstance(record, dict):
+                continue
+            ip = record.get("ip")
+            if not isinstance(ip, str) or not HostResolver.isAddressLiteral(ip):
+                continue
+            host = host.strip().lower()
+            if not host:
+                continue
+            with HostResolver._lock:
+                # Age is not held against it. A remembered address that has
+                # moved costs one fast failure at connect and is corrected by
+                # the next sweep; having no address at all costs a 5s wait on
+                # every cue until mDNS decides to answer.
+                HostResolver._entries[host] = {
+                    "ip": ip, "at": now, "failures": 0, "fromCache": True}
+            loaded += 1
+        if loaded:
+            print(f"Resolver loaded {loaded} remembered address(es)", flush=True)
+        return loaded
+
+    @staticmethod
+    def saveCache(path = None):
+        """Writes the resolved addresses, so the next start is warm."""
+        with HostResolver._lock:
+            data = {h: {"ip": e["ip"], "savedAt": time.time()}
+                    for h, e in HostResolver._entries.items() if e["ip"]}
+        if not data:
+            return False
+        return jsonStore.saveJsonAtomic(path or HostResolver.cachePath(), data)

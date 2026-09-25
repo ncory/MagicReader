@@ -37,10 +37,14 @@ class ResolverTestCase(unittest.TestCase):
     def setUp(self):
         HostResolver.reset()
         self.originalDns = hostResolver.socket.getaddrinfo
+        # Sweeps must not write to the real data directory
+        self.originalPersist = HostResolver._persist
+        HostResolver._persist = False
         self.addCleanup(self._restore)
 
     def _restore(self):
         hostResolver.socket.getaddrinfo = self.originalDns
+        HostResolver._persist = self.originalPersist
         HostResolver.reset()
 
     def useDns(self, table):
@@ -257,6 +261,76 @@ class RestIntegrationTests(ResolverTestCase):
             rest.RestHelpers._http_obj = original
         self.assertEqual(seen["uri"], "http://unknown.local/x")
         self.assertNotIn("Host", seen["headers"])
+
+
+class PersistenceTests(ResolverTestCase):
+    def setUp(self):
+        super().setUp()
+        import tempfile, os
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "resolver-cache.json")
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.dir, ignore_errors=True))
+
+    def test_addresses_survive_a_restart(self):
+        # The point: a reader that reboots while mDNS is not answering must
+        # still reach its devices
+        self.useDns({"hm4-wled.local": "192.168.1.135",
+                     "player1.local": "192.168.1.235"})
+        HostResolver.primeFrom(["hm4-wled.local", "player1.local"])
+        HostResolver.refreshOnce()
+        self.assertTrue(HostResolver.saveCache(self.path))
+
+        HostResolver.reset()                       # as if restarted
+        self.useDns({})                            # ...with mDNS dead
+        self.assertEqual(HostResolver.loadCache(self.path), 2)
+        self.assertEqual(HostResolver.addressFor("hm4-wled.local"), "192.168.1.135")
+        self.assertEqual(HostResolver.addressFor("player1.local"), "192.168.1.235")
+
+    def test_a_remembered_address_is_corrected_by_the_next_sweep(self):
+        import json
+        with open(self.path, "w") as handle:
+            json.dump({"player1.local": {"ip": "192.168.1.99", "savedAt": 0}}, handle)
+        HostResolver.loadCache(self.path)
+        self.assertEqual(HostResolver.addressFor("player1.local"), "192.168.1.99")
+        self.useDns({"player1.local": "192.168.1.235"})
+        HostResolver.refreshOnce()
+        self.assertEqual(HostResolver.addressFor("player1.local"), "192.168.1.235")
+
+    def test_only_resolved_names_are_written(self):
+        import json
+        self.useDns({"good.local": "10.0.0.1"})
+        HostResolver.primeFrom(["good.local", "bad.local"])
+        HostResolver.refreshOnce()
+        HostResolver.saveCache(self.path)
+        with open(self.path) as handle:
+            written = json.load(handle)
+        self.assertEqual(list(written), ["good.local"])
+
+    def test_a_missing_or_corrupt_cache_is_harmless(self):
+        import os
+        self.assertEqual(HostResolver.loadCache(os.path.join(self.dir, "nope.json")), 0)
+        with open(self.path, "w") as handle:
+            handle.write("{not json")
+        self.assertEqual(HostResolver.loadCache(self.path), 0)
+
+    def test_junk_entries_are_skipped(self):
+        import json
+        with open(self.path, "w") as handle:
+            json.dump({"a.local": {"ip": "not-an-ip"},
+                       "b.local": {"ip": None},
+                       "c.local": "wrong shape",
+                       "": {"ip": "10.0.0.1"},
+                       "d.local": {"ip": "10.0.0.2"}}, handle)
+        self.assertEqual(HostResolver.loadCache(self.path), 1)
+        self.assertEqual(HostResolver.addressFor("d.local"), "10.0.0.2")
+
+    def test_saving_with_nothing_resolved_writes_no_file(self):
+        import os
+        self.useDns({})
+        HostResolver.primeFrom(["nope.local"])
+        HostResolver.refreshOnce()
+        self.assertFalse(HostResolver.saveCache(self.path))
+        self.assertFalse(os.path.exists(self.path))
 
 
 class ThreadTests(ResolverTestCase):

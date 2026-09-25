@@ -203,6 +203,9 @@ class MagicBand():
         hosts = self.sequence_manager.collectHostNames()
         if isinstance(settings.get('wled_address'), str):
             hosts.add(settings['wled_address'])
+        # Remembered addresses first, so the app comes up warm even when mDNS
+        # is not answering yet, then register the names and keep them fresh
+        HostResolver.loadCache()
         HostResolver.primeFrom(hosts)
         HostResolver.start()
         print(f"Resolver warming {len(hosts)} device name(s)", flush=True)
