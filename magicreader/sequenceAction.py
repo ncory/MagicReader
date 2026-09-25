@@ -2,6 +2,7 @@ from enum import Enum
 import math
 import re
 from rest import RestQueue, UnreachableHosts
+from hostResolver import HostResolver
 import time
 import socket
 from wled import WLEDManager
@@ -398,7 +399,10 @@ class SequenceAction:
             #print(f"Message as bytes: {data}")
             # Send bytes over UDP
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(data, (self.address, self.port))
+            # sendto resolves inline, on this thread. Use the cached address
+            # when there is one so a flapping name cannot stall the sequence.
+            sock.sendto(data, (HostResolver.addressFor(self.address) or self.address,
+                               self.port))
         except Exception as e:
             print(f"Error sending BrightSign command: {e}", flush=True)
             UnreachableHosts.recordFailure(self.address, e)
@@ -431,7 +435,10 @@ class SequenceAction:
             #print(f"Message as bytes: {data}")
             # Send bytes over UDP
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(data, (self.address, self.port))
+            # sendto resolves inline, on this thread. Use the cached address
+            # when there is one so a flapping name cannot stall the sequence.
+            sock.sendto(data, (HostResolver.addressFor(self.address) or self.address,
+                               self.port))
         except Exception as e:
             print(f"Error sending ChromaTeq command: {e}", flush=True)
             UnreachableHosts.recordFailure(self.address, e)

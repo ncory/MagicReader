@@ -36,6 +36,28 @@ class SequenceManager:
         print(f"Loaded {len(self.sequences)} sequences from file", flush=True)
         return True
 
+    def collectHostNames(self):
+        """Every device name the loaded sequences address.
+
+        Used to warm the resolver at startup so the first tap does not pay for
+        a cold lookup. Includes URL actions, whose host is in the url.
+        """
+        hosts = set()
+        for id, sequence in self.sequences.items():
+            if not isinstance(sequence, Sequence):
+                continue
+            for action in sequence.actions:
+                if not isinstance(action, SequenceAction):
+                    continue
+                if isinstance(action.address, str) and action.address.strip():
+                    hosts.add(action.address.strip())
+                if isinstance(action.url, str) and "//" in action.url:
+                    host = action.url.split("//", 1)[1].split("/")[0]
+                    host = host.split("@")[-1].split(":")[0]
+                    if host:
+                        hosts.add(host)
+        return hosts
+
     def preCacheSoundFiles(self, soundManager: SoundManager):
         """Preloads SoundFile sequence actions into the sound manager cache."""
         if soundManager is None or not isinstance(soundManager, SoundManager):

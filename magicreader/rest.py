@@ -4,6 +4,8 @@ import threading
 import time
 from urllib.parse import urlsplit
 
+from hostResolver import HostResolver
+
 
 class UnreachableHosts:
     """Remembers hosts that just failed, so the next cue does not wait on them.
@@ -161,6 +163,10 @@ class RestHelpers:
         # queue is serial, so the wait is not paid by this cue alone
         if UnreachableHosts.shouldSkip(url):
             return False
+        # Use the cached address when we have one, so this call does not wait
+        # on a name. The cooldown above and the bookkeeping below stay keyed on
+        # the original url, so one device is one entry whichever form is used.
+        target, originalHost = HostResolver.substitute(url)
         print(f"REST Call: {method}: {url}", flush=True)
         try:
             # Body content
@@ -173,9 +179,14 @@ class RestHelpers:
             else:
                 message_headers = {}
                 body = None
+            # Addressing by IP must not change what the far end thinks it was
+            # asked for
+            if originalHost is not None:
+                message_headers = dict(message_headers)
+                message_headers['Host'] = originalHost
             # Make HTTP call
             response = RestHelpers._http_obj.request(
-                uri = url,
+                uri = target,
                 method = method,
                 body = body,
                 headers = message_headers
