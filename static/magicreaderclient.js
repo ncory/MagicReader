@@ -918,7 +918,8 @@ function createActionTypeSelect(type) {
         ["gpioClosure", "GPIO Closure"],
         ["brightsign", "BrightSign"],
         ["chromateq", "ChromaTeq"],
-        ["magicBandBroadcast", "MagicBand Broadcast"]
+        ["magicBandBroadcast", "MagicBand Broadcast"],
+        ["piPlayer", "PiPlayer"]
     ].forEach((option) => {
         select.append($('<option>').attr("value", option[0]).text(option[1]));
     });
@@ -934,9 +935,30 @@ function createActionValueControl(action) {
         .append($('<option value="PUT">PUT</option>'))
         .append($('<option value="DELETE">DELETE</option>'))
         .val(getStringFromDict(action, 'method') || "GET"));
+    wrapper.append(createActionPiPlayerCommandSelect(getStringFromDict(action, 'command')));
     wrapper.append($('<input type="text" class="form-control action-value">').val(getActionValue(action)));
     wrapper.append(createActionGpioOutputSelect(getActionValue(action)));
     return wrapper;
+}
+
+function createActionPiPlayerCommandSelect(selectedValue) {
+    let select = $('<select class="form-select action-piplayer-command d-none" onchange="piPlayerCommandChanged(this);">');
+    [
+        ["play", "Play"],
+        ["stop", "Stop"],
+        ["next", "Next"],
+        ["previous", "Previous"],
+        ["pause", "Pause"],
+        ["resume", "Resume"],
+        ["toggle", "Pause/Resume"],
+        ["loop-item", "Loop Item"]
+    ].forEach((option) => {
+        select.append($('<option>').attr("value", option[0]).text(option[1]));
+    });
+    select.val(selectedValue || "play");
+    // An unrecognised stored command would leave the select blank
+    if (!select.val()) select.val("play");
+    return select;
 }
 
 function createActionGpioOutputSelect(selectedValue) {
@@ -967,6 +989,9 @@ function getActionValue(action) {
     if (type === "wledInternal" || type === "wledExternal") return action.data == null ? "" : action.data;
     if (type === "soundFile" || type === "musicFile" || type === "gpioClosure") return action.data || "";
     if (type === "magicBandBroadcast") return action.data || "";
+    // PiPlayer keeps its command in the dedicated select; the value box holds
+    // the playlist id (play) or the loop-item mode
+    if (type === "piPlayer") return action.data || "";
     return getStringFromDict(action, 'command') || "";
 }
 
@@ -986,10 +1011,12 @@ function updateActionRowForType(row) {
     let method = row.find('.action-method');
     let value = row.find('.action-value');
     let gpioOutput = row.find('.action-gpio-output');
+    let piPlayerCommand = row.find('.action-piplayer-command');
     let port = row.find('.action-port');
     target.prop('disabled', false).attr('placeholder', 'Target');
     method.toggleClass('d-none', type !== "url");
     gpioOutput.toggleClass('d-none', type !== "gpioClosure");
+    piPlayerCommand.toggleClass('d-none', type !== "piPlayer");
     value.toggleClass('d-none', type === "gpioClosure");
     value.attr('placeholder', 'Value');
     port.prop('disabled', false);
@@ -1032,11 +1059,34 @@ function updateActionRowForType(row) {
         value.prop('disabled', false);
         value.attr('placeholder', 'Data');
         port.prop('disabled', true).val('');
+    } else if (type === "piPlayer") {
+        target.attr('placeholder', 'PiPlayer address');
+        // Blank port means PiPlayer's installed default of 80
+        port.prop('disabled', false).attr('placeholder', '80');
+        updateActionRowForPiPlayerCommand(row);
     } else {
         target.attr('placeholder', 'Address');
         value.prop('disabled', false);
         value.attr('placeholder', 'Command');
         port.attr('placeholder', 'Port');
+    }
+}
+
+function piPlayerCommandChanged(element) {
+    updateActionRowForPiPlayerCommand($(element).closest('tr'));
+}
+
+// Only two of the eight PiPlayer commands take an argument, so the value box
+// follows the command rather than the action type.
+function updateActionRowForPiPlayerCommand(row) {
+    let command = row.find('.action-piplayer-command').val();
+    let value = row.find('.action-value');
+    if (command === "play") {
+        value.prop('disabled', false).attr('placeholder', 'Playlist id (blank = resume)');
+    } else if (command === "loop-item") {
+        value.prop('disabled', false).attr('placeholder', 'toggle / on / off');
+    } else {
+        value.prop('disabled', true).val('').attr('placeholder', 'No value');
     }
 }
 
@@ -1083,6 +1133,13 @@ function buildActionFromRow(row) {
     } else if (type === "magicBandBroadcast") {
         action.address = target;
         action.data = value;
+    } else if (type === "piPlayer") {
+        action.address = target;
+        action.command = row.find('.action-piplayer-command').val() || "play";
+        // Six of the eight commands take no argument - don't store an empty
+        // string for them, so the saved sequence says what it means
+        action.data = (action.command === "play" || action.command === "loop-item") ? value : null;
+        action.port = Number.isFinite(port) && port >= 0 ? port : -1;
     } else {
         action.address = target;
         action.command = value;

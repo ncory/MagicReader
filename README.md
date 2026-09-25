@@ -74,6 +74,39 @@ access it needs - it needs one password from you, once. Until then the System
 menu buttons return `ok` and do nothing, because every `sudo` behind them is
 waiting for a password nobody can type.
 
+## PiPlayer
+A sequence action can drive a [PiPlayer](https://github.com/ncory/PiPlayer) -
+the fullscreen playlist player - so a band tap starts a video. Add an action of
+type **PiPlayer** in the sequence editor:
+
+| Column | |
+|---|---|
+| Target | The player's address, e.g. `player1.local`. A pasted `http://player1.local/` is accepted too. |
+| Value | The command, plus its argument where it takes one. |
+| Port | Blank for PiPlayer's installed default of 80. |
+
+**Play** takes a playlist id; left blank it resumes a paused player, or restarts
+the last or default playlist. **Loop Item** takes `toggle` (the default), `on`
+or `off`. The other six - Stop, Next, Previous, Pause, Resume and Pause/Resume -
+take no argument.
+
+Playlist ids are checked against PiPlayer's own rule (lowercase letters, digits,
+`-` and `_`, up to 64 characters) before the id goes into a URL path. Anything
+else is refused with a line in the log rather than sent, which keeps a stray
+`../` out of the path and turns a typo into a clear message instead of a 404.
+
+The transition is PiPlayer's to choose: a `play` cue with no transition of its
+own falls back to the target playlist's, so set it there. For anything more
+involved - a per-cue transition, a starting index, editing a playlist - use a
+plain **URL** action. PiPlayer accepts transport commands over GET with query
+parameters, so one URL action covers the whole API:
+
+```
+GET http://player1.local/api/playlists/lobby/play?transition=dip&duration=2&color=%23ffffff
+```
+
+Neither MagicReader nor PiPlayer authenticates. Both assume a trusted LAN.
+
 ## Tests
 ```
 ./tests/run.sh              # or: PYTHON=.venv/bin/python ./tests/run.sh
@@ -93,5 +126,5 @@ runner invokes them explicitly.
 What it covers: the RestQueue singleton and its shutdown drain, crash-safe JSON
 writes and backup recovery, GPIO pin validation, sequence parsing and
 fractional delays, Disney band detection, sound path resolution, the event
-loop's exception guard, and that the shipped default data files are
-self-consistent.
+loop's exception guard, the PiPlayer command-to-URL mapping, and that the
+shipped default data files are self-consistent.

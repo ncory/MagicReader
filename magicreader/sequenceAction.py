@@ -1,5 +1,6 @@
 from enum import Enum
 import math
+import re
 from rest import RestQueue
 import time
 import socket
@@ -20,6 +21,22 @@ class ActionType(str, Enum):
     ChromaTeq = "chromateq"
     MagicBandBroadcast = "magicBandBroadcast"
     GPIOClosure = "gpioClosure"
+    PiPlayer = "piPlayer"
+
+
+# PiPlayer transport commands, named exactly as its HTTP API names them so the
+# stored value maps straight onto an endpoint with no translation table.
+PIPLAYER_COMMANDS = ("play", "stop", "next", "previous",
+                     "pause", "resume", "toggle", "loop-item")
+
+# PiPlayer playlist ids: "1-64 characters: lowercase letters, digits, - and _"
+# (its API.md). The id goes into a URL path, so anything else is refused rather
+# than sent - a clear log line beats a mystery 404, and it keeps a stray "../"
+# out of the path.
+PIPLAYER_PLAYLIST_ID = re.compile(r"^[a-z0-9_-]{1,64}$")
+
+# loop-item takes enabled=toggle|true|false. The UI offers these three words.
+PIPLAYER_LOOP_MODES = {"toggle": "toggle", "on": "true", "off": "false"}
 
 
 @dataclass
@@ -67,6 +84,12 @@ class SequenceAction:
         elif self.type == ActionType.MagicBandBroadcast:
             data["address"] = self.address
             data["data"] = self.data
+        elif self.type == ActionType.PiPlayer:
+            data["address"] = self.address
+            data["port"] = self.port
+            data["command"] = self.command
+            if self.data is not None:
+                data["data"] = self.data
         return data
     
     @staticmethod
@@ -141,6 +164,10 @@ class SequenceAction:
             if not isinstance(dataObj, str):
                 dataObj = None
             return SequenceAction.new_action_magicband_broadcast(address, dataObj, delay)
+        elif type == 'piPlayer':
+            if not isinstance(dataObj, str):
+                dataObj = None
+            return SequenceAction.new_action_piplayer(address, port, command, dataObj, delay)
         elif type == 'gpioClosure':
             if not isinstance(dataObj, str):
                 print("Invalid GPIO output id provided", flush=True)
@@ -221,6 +248,17 @@ class SequenceAction:
         return action
 
     @staticmethod
+    def new_action_piplayer(address: str, port: int = -1, command: str = "play",
+                            data: str = None, delay: float = 0):
+        action = SequenceAction(ActionType.PiPlayer)
+        action.address = address
+        action.port = port if isinstance(port, int) else -1
+        action.command = command
+        action.data = data
+        action.delay = delay
+        return action
+
+    @staticmethod
     def new_action_gpio_closure(output_id: str, delay: float = 0):
         action = SequenceAction(ActionType.GPIOClosure)
         action.data = output_id
@@ -260,6 +298,8 @@ class SequenceAction:
             return self.performMagicBandBroadcastAction()
         elif self.type == ActionType.GPIOClosure:
             return self.performGPIOClosureAction(gpioManager, cancel_event)
+        elif self.type == ActionType.PiPlayer:
+            return self.performPiPlayerAction()
         else:
             print(f"Unknown action type: {self.type}", flush=True)
             return False
@@ -408,6 +448,66 @@ class SequenceAction:
             return False
         # Done
         print("Finished sending Magic Band broadcast", flush=True)
+        return True
+
+    def buildPiPlayerUrl(self):
+        """Returns the PiPlayer API URL for this action, or None if unusable.
+
+        Split out from performPiPlayerAction so the mapping can be tested
+        without a player on the network.
+        """
+        # Address
+        if self.address is None or not isinstance(self.address, str) or not self.address.strip():
+            print("Invalid PiPlayer address provided", flush=True)
+            return None
+        host = self.address.strip()
+        # Tolerate a pasted "http://player1.local/" - people copy it from the
+        # browser bar, and silently producing "http://http://..." helps nobody
+        for scheme in ("http://", "https://"):
+            if host.lower().startswith(scheme):
+                host = host[len(scheme):]
+                break
+        host = host.strip("/")
+        if not host:
+            print("Invalid PiPlayer address provided", flush=True)
+            return None
+        # Port. -1 means "not set", which is PiPlayer's installed default of 80
+        if isinstance(self.port, int) and self.port > 0 and ":" not in host:
+            host = f"{host}:{self.port}"
+        # Command
+        command = self.command if isinstance(self.command, str) else None
+        if command is not None:
+            command = command.strip().lower()
+        if command not in PIPLAYER_COMMANDS:
+            print(f"Invalid PiPlayer command: {self.command}", flush=True)
+            return None
+        # play carries an optional playlist id; with none, PiPlayer resumes or
+        # restarts the last/default playlist, which is a useful cue in itself
+        if command == "play":
+            playlist = self.data.strip() if isinstance(self.data, str) else ""
+            if not playlist:
+                return f"http://{host}/api/play"
+            if not PIPLAYER_PLAYLIST_ID.match(playlist):
+                print(f"Invalid PiPlayer playlist id: {playlist!r} "
+                      "(lowercase letters, digits, - and _ only)", flush=True)
+                return None
+            return f"http://{host}/api/playlists/{playlist}/play"
+        # loop-item takes a mode; anything unrecognised falls back to toggle
+        if command == "loop-item":
+            mode = self.data.strip().lower() if isinstance(self.data, str) else ""
+            enabled = PIPLAYER_LOOP_MODES.get(mode, "toggle")
+            return f"http://{host}/api/loop-item?enabled={enabled}"
+        return f"http://{host}/api/{command}"
+
+    def performPiPlayerAction(self):
+        """Sends a transport command to a PiPlayer."""
+        url = self.buildPiPlayerUrl()
+        if url is None:
+            return False
+        print(f"Performing PiPlayer action: {self.command} to {self.address}", flush=True)
+        # POST is what PiPlayer documents for transport. It takes no body, and
+        # the queue's httplib2 sends none for a payload of None
+        RestQueue().makeRestCallAsync(url, "POST")
         return True
 
     def performGPIOClosureAction(self, gpioManager: GPIOManager, cancel_event = None):

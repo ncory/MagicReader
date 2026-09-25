@@ -108,7 +108,14 @@ body {
 }
 
 .sequence-action-value-cell {
-    min-width: 12rem;
+    min-width: 15rem;
+}
+
+/* The PiPlayer rows put a command select and its argument in the Value cell.
+   Overrides the min-width: 0 above, which otherwise shrinks "Pause/Resume"
+   and "Loop Item" to an unreadable stub. */
+.sequence-actions-table .action-piplayer-command {
+    min-width: 8rem;
 }
 
 .sequence-action-buttons-cell {
