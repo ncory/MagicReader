@@ -19,6 +19,7 @@ Start it once with start(). Without that the cache stays empty, addressFor()
 returns None for everything, and callers fall back to passing the name to the
 system resolver exactly as before - degraded, but never broken.
 """
+import concurrent.futures
 import ipaddress
 import socket
 import threading
@@ -131,36 +132,57 @@ class HostResolver:
         return f"{scheme}//{newAuthority}" + (f"/{tail}" if tail or url.endswith("/") else ""), authority
 
     # --- refreshing ------------------------------------------------------
+    MAX_WORKERS = 8
+
+    @staticmethod
+    def _lookup(host):
+        try:
+            return socket.getaddrinfo(host, None, socket.AF_INET)[0][4][0]
+        except Exception:
+            return None
+
+    @staticmethod
+    def _record(host, ip):
+        with HostResolver._lock:
+            entry = HostResolver._entries.get(host)
+            if entry is None:
+                return
+            if ip is not None:
+                was = entry["ip"]
+                if was != ip:
+                    print(f"Resolved {host} -> {ip}"
+                          + (f" (was {was})" if was else ""), flush=True)
+                entry["ip"] = ip
+                entry["at"] = time.monotonic()
+                entry["failures"] = 0
+            else:
+                entry["failures"] += 1
+                # Say so once, not on every sweep, and only while there is
+                # nothing to fall back on
+                if entry["failures"] == 1 and entry["ip"] is None:
+                    print(f"Could not resolve {host} - cues to it will wait "
+                          "on the system resolver until it answers", flush=True)
+
     @staticmethod
     def refreshOnce():
-        """Resolves every known name once. Blocks - for the thread and tests."""
+        """Resolves every known name once. Blocks - for the thread and tests.
+
+        In parallel, because a name that does not answer costs a flat 5s: a
+        serial sweep over six names takes half a minute, the refresher spends
+        its life blocked, and a name that would have resolved waits behind
+        ones that will not. In parallel a sweep costs about one timeout no
+        matter how many names there are.
+        """
         with HostResolver._lock:
             hosts = list(HostResolver._entries)
-        for host in hosts:
-            try:
-                ip = socket.getaddrinfo(host, None, socket.AF_INET)[0][4][0]
-            except Exception:
-                ip = None
-            with HostResolver._lock:
-                entry = HostResolver._entries.get(host)
-                if entry is None:
-                    continue
-                if ip is not None:
-                    changed = entry["ip"] != ip
-                    if changed:
-                        was = entry["ip"]
-                        print(f"Resolved {host} -> {ip}"
-                              + (f" (was {was})" if was else ""), flush=True)
-                    entry["ip"] = ip
-                    entry["at"] = time.monotonic()
-                    entry["failures"] = 0
-                else:
-                    entry["failures"] += 1
-                    # Say so once, not on every sweep, and only while we have
-                    # nothing to fall back on
-                    if entry["failures"] == 1 and entry["ip"] is None:
-                        print(f"Could not resolve {host} - cues to it will wait "
-                              "on the system resolver until it answers", flush=True)
+        if not hosts:
+            return
+        workers = min(HostResolver.MAX_WORKERS, len(hosts))
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=workers, thread_name_prefix="resolve") as pool:
+            results = list(pool.map(HostResolver._lookup, hosts))
+        for host, ip in zip(hosts, results):
+            HostResolver._record(host, ip)
 
     @staticmethod
     def _run():

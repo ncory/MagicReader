@@ -130,6 +130,40 @@ class LookupTests(ResolverTestCase):
         self.assertIsNone(HostResolver.addressFor("gone.local"))
 
 
+class SweepTests(ResolverTestCase):
+    def test_a_slow_name_does_not_delay_the_others(self):
+        # A name that does not answer costs a flat 5s on a reader. Serially,
+        # six of them is half a minute and the refresher never gets ahead.
+        import time as clock
+
+        def slow(host, *args, **kwargs):
+            clock.sleep(0.3)
+            if host == "good.local":
+                return [(2, 1, 6, "", ("10.0.0.9", 0))]
+            raise OSError("no answer")
+
+        hostResolver.socket.getaddrinfo = slow
+        names = [f"dead{i}.local" for i in range(6)] + ["good.local"]
+        HostResolver.primeFrom(names)
+
+        started = clock.monotonic()
+        HostResolver.refreshOnce()
+        elapsed = clock.monotonic() - started
+
+        serial = 0.3 * len(names)
+        self.assertLess(elapsed, serial / 2,
+                        f"sweep took {elapsed:.2f}s; serial would be {serial:.2f}s")
+        # And it still recorded every result correctly
+        self.assertEqual(HostResolver.addressFor("good.local"), "10.0.0.9")
+        for i in range(6):
+            self.assertIsNone(HostResolver.addressFor(f"dead{i}.local"))
+
+    def test_a_sweep_with_nothing_registered_is_harmless(self):
+        self.useDns({})
+        HostResolver.refreshOnce()
+        self.assertEqual(HostResolver.snapshot(), {})
+
+
 class SubstitutionTests(ResolverTestCase):
     def setUp(self):
         super().setUp()
