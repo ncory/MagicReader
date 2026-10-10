@@ -111,10 +111,11 @@ body {
     min-width: 15rem;
 }
 
-/* The PiPlayer rows put a command select and its argument in the Value cell.
+/* The device rows put a command select and its argument in the Value cell.
    Overrides the min-width: 0 above, which otherwise shrinks "Pause/Resume"
-   and "Loop Item" to an unreadable stub. */
-.sequence-actions-table .action-piplayer-command {
+   and "Play Playlist" to an unreadable stub. */
+.sequence-actions-table .action-piplayer-command,
+.sequence-actions-table .action-magicbandtx-command {
     min-width: 8rem;
 }
 

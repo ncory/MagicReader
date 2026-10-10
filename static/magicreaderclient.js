@@ -918,7 +918,7 @@ function createActionTypeSelect(type) {
         ["gpioClosure", "GPIO Closure"],
         ["brightsign", "BrightSign"],
         ["chromateq", "ChromaTeq"],
-        ["magicBandBroadcast", "MagicBand Broadcast"],
+        ["magicBandTX", "MagicBand TX"],
         ["piPlayer", "PiPlayer"]
     ].forEach((option) => {
         select.append($('<option>').attr("value", option[0]).text(option[1]));
@@ -935,10 +935,26 @@ function createActionValueControl(action) {
         .append($('<option value="PUT">PUT</option>'))
         .append($('<option value="DELETE">DELETE</option>'))
         .val(getStringFromDict(action, 'method') || "GET"));
+    wrapper.append(createActionMagicBandTxCommandSelect(getStringFromDict(action, 'command')));
     wrapper.append(createActionPiPlayerCommandSelect(getStringFromDict(action, 'command')));
     wrapper.append($('<input type="text" class="form-control action-value">').val(getActionValue(action)));
     wrapper.append(createActionGpioOutputSelect(getActionValue(action)));
     return wrapper;
+}
+
+function createActionMagicBandTxCommandSelect(selectedValue) {
+    let select = $('<select class="form-select action-magicbandtx-command d-none" onchange="magicBandTxCommandChanged(this);">');
+    [
+        ["send", "Send Cue"],
+        ["play", "Play Playlist"],
+        ["stop", "Stop"]
+    ].forEach((option) => {
+        select.append($('<option>').attr("value", option[0]).text(option[1]));
+    });
+    select.val(selectedValue || "send");
+    // A command belonging to another action type would leave the select blank
+    if (!select.val()) select.val("send");
+    return select;
 }
 
 function createActionPiPlayerCommandSelect(selectedValue) {
@@ -988,7 +1004,7 @@ function getActionValue(action) {
     if (type === "delay") return "";
     if (type === "wledInternal" || type === "wledExternal") return action.data == null ? "" : action.data;
     if (type === "soundFile" || type === "musicFile" || type === "gpioClosure") return action.data || "";
-    if (type === "magicBandBroadcast") return action.data || "";
+    if (type === "magicBandTX") return action.data || "";
     // PiPlayer keeps its command in the dedicated select; the value box holds
     // the playlist id (play) or the loop-item mode
     if (type === "piPlayer") return action.data || "";
@@ -1012,11 +1028,13 @@ function updateActionRowForType(row) {
     let value = row.find('.action-value');
     let gpioOutput = row.find('.action-gpio-output');
     let piPlayerCommand = row.find('.action-piplayer-command');
+    let magicBandTxCommand = row.find('.action-magicbandtx-command');
     let port = row.find('.action-port');
     target.prop('disabled', false).attr('placeholder', 'Target');
     method.toggleClass('d-none', type !== "url");
     gpioOutput.toggleClass('d-none', type !== "gpioClosure");
     piPlayerCommand.toggleClass('d-none', type !== "piPlayer");
+    magicBandTxCommand.toggleClass('d-none', type !== "magicBandTX");
     value.toggleClass('d-none', type === "gpioClosure");
     value.attr('placeholder', 'Value');
     port.prop('disabled', false);
@@ -1054,11 +1072,11 @@ function updateActionRowForType(row) {
         value.prop('disabled', true).val('');
         updateGpioOutputsInSelect(gpioOutput, gpioOutput.val() || value.val());
         port.prop('disabled', true).val('');
-    } else if (type === "magicBandBroadcast") {
-        target.attr('placeholder', 'Address');
-        value.prop('disabled', false);
-        value.attr('placeholder', 'Data');
-        port.prop('disabled', true).val('');
+    } else if (type === "magicBandTX") {
+        target.attr('placeholder', 'MagicBand TX address');
+        // Blank port means the device's default of 80
+        port.prop('disabled', false).attr('placeholder', '80');
+        updateActionRowForMagicBandTxCommand(row);
     } else if (type === "piPlayer") {
         target.attr('placeholder', 'PiPlayer address');
         // Blank port means PiPlayer's installed default of 80
@@ -1069,6 +1087,25 @@ function updateActionRowForType(row) {
         value.prop('disabled', false);
         value.attr('placeholder', 'Command');
         port.attr('placeholder', 'Port');
+    }
+}
+
+function magicBandTxCommandChanged(element) {
+    updateActionRowForMagicBandTxCommand($(element).closest('tr'));
+}
+
+// Send takes a cue as query parameters - that is the device's own calling
+// convention, and it reaches every effect including the five-colour ones.
+function updateActionRowForMagicBandTxCommand(row) {
+    let command = row.find('.action-magicbandtx-command').val();
+    let value = row.find('.action-value');
+    if (command === "send") {
+        value.prop('disabled', false)
+             .attr('placeholder', 'effect=color&color=21&duration=10');
+    } else if (command === "play") {
+        value.prop('disabled', false).attr('placeholder', 'Playlist name');
+    } else {
+        value.prop('disabled', true).val('').attr('placeholder', 'No value');
     }
 }
 
@@ -1130,9 +1167,12 @@ function buildActionFromRow(row) {
         action.data = value;
     } else if (type === "gpioClosure") {
         action.data = row.find('.action-gpio-output').val();
-    } else if (type === "magicBandBroadcast") {
+    } else if (type === "magicBandTX") {
         action.address = target;
-        action.data = value;
+        action.command = row.find('.action-magicbandtx-command').val() || "send";
+        // Stop takes no argument - don't store an empty string for it
+        action.data = (action.command === "stop") ? null : value;
+        action.port = Number.isFinite(port) && port >= 0 ? port : -1;
     } else if (type === "piPlayer") {
         action.address = target;
         action.command = row.find('.action-piplayer-command').val() || "play";

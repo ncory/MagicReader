@@ -74,6 +74,51 @@ access it needs - it needs one password from you, once. Until then the System
 menu buttons return `ok` and do nothing, because every `sudo` behind them is
 waiting for a password nobody can type.
 
+## MagicBand TX
+A sequence action can drive a [MagicBandTX](https://github.com/ncory/MagicBandTX) -
+the ESP32 that broadcasts the Bluetooth cues a MagicBand+ responds to - so a
+band tap lights the band back up. Add an action of type **MagicBand TX**:
+
+| Column | |
+|---|---|
+| Target | The transmitter's address, e.g. `magicband-tx.local`. |
+| Value | The command, plus its argument where it takes one. |
+| Port | Blank for the device's default of 80. |
+
+**Send Cue** takes the cue as query parameters, exactly as the device's own
+documentation writes them:
+
+```
+effect=color&color=21&duration=10
+effect=five&colors=21,2,25,0,8&vib=3
+effect=rgb&rgb=#FF8000&duration=4
+hex=8301E905002E0EF5B0
+```
+
+Its parameters differ per effect - colour, zone, ring and centre, five indices,
+rgb, duration, fade, vibration - which is more than one value box can model as
+fields. A query string reaches all of them, including the five-colour effects,
+because the device parses `21,2,25,0,8` as readily as a JSON array. The device's
+own **API** tab lists every parameter, and `/api/catalog` returns them as JSON.
+
+**Play Playlist** takes a playlist name as saved on the device; spaces are fine.
+**Stop** takes no argument.
+
+What you type is decoded and re-encoded before it is sent, so a `#` or a space
+reaches the device intact instead of truncating the URL, and text pasted from
+the device's docs (`rgb=%23FF8000`) is not encoded a second time.
+
+The call is fire-and-forget: MagicReader queues it and does not read the reply,
+so a cue the device rejects fails silently. Check it on the device's own page
+first, or with `curl`, if a cue does not do what you expect.
+
+### Replaces MagicBand Broadcast
+This replaced the old **MagicBand Broadcast** action, which posted to a
+`/command` endpoint that no longer exists. **This is a breaking change.**
+Existing actions of the old type are ignored when sequences load - the sequence
+itself still loads, without them - and they disappear from the file the next
+time that sequence is saved. Rebuild them as MagicBand TX actions.
+
 ## PiPlayer
 A sequence action can drive a [PiPlayer](https://github.com/ncory/PiPlayer) -
 the fullscreen playlist player - so a band tap starts a video. Add an action of
@@ -126,5 +171,5 @@ runner invokes them explicitly.
 What it covers: the RestQueue singleton and its shutdown drain, crash-safe JSON
 writes and backup recovery, GPIO pin validation, sequence parsing and
 fractional delays, Disney band detection, sound path resolution, the event
-loop's exception guard, the PiPlayer command-to-URL mapping, and that the
-shipped default data files are self-consistent.
+loop's exception guard, the PiPlayer and MagicBand TX command-to-URL
+mappings, and that the shipped default data files are self-consistent.

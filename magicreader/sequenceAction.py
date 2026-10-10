@@ -4,6 +4,7 @@ import re
 from rest import RestQueue
 import time
 import socket
+from urllib.parse import unquote_plus, urlencode
 from wled import WLEDManager
 from soundManager import SoundManager
 from gpioManager import GPIOManager
@@ -19,10 +20,14 @@ class ActionType(str, Enum):
     URL = "url"
     BrightSign = "brightsign"
     ChromaTeq = "chromateq"
-    MagicBandBroadcast = "magicBandBroadcast"
+    MagicBandTX = "magicBandTX"
     GPIOClosure = "gpioClosure"
     PiPlayer = "piPlayer"
 
+
+# MagicBandTX API actions this exposes. /api/build is diagnostic and
+# /api/config, /api/playlist* are configuration, so neither belongs in a cue.
+MAGICBANDTX_COMMANDS = ("send", "play", "stop")
 
 # PiPlayer transport commands, named exactly as its HTTP API names them so the
 # stored value maps straight onto an endpoint with no translation table.
@@ -81,9 +86,12 @@ class SequenceAction:
             data["address"] = self.address
             data["port"] = self.port
             data["command"] = self.command
-        elif self.type == ActionType.MagicBandBroadcast:
+        elif self.type == ActionType.MagicBandTX:
             data["address"] = self.address
-            data["data"] = self.data
+            data["port"] = self.port
+            data["command"] = self.command
+            if self.data is not None:
+                data["data"] = self.data
         elif self.type == ActionType.PiPlayer:
             data["address"] = self.address
             data["port"] = self.port
@@ -160,10 +168,10 @@ class SequenceAction:
             return SequenceAction.new_action_brightsign(address, port, command, delay)
         elif type == 'chromateq':
             return SequenceAction.new_action_chromateq(address, port, command, delay)
-        elif type == 'magicBandBroadcast':
+        elif type == 'magicBandTX':
             if not isinstance(dataObj, str):
                 dataObj = None
-            return SequenceAction.new_action_magicband_broadcast(address, dataObj, delay)
+            return SequenceAction.new_action_magicband_tx(address, port, command, dataObj, delay)
         elif type == 'piPlayer':
             if not isinstance(dataObj, str):
                 dataObj = None
@@ -240,9 +248,12 @@ class SequenceAction:
         return action
     
     @staticmethod
-    def new_action_magicband_broadcast(address:str, data: str, delay: float = 0):
-        action = SequenceAction(ActionType.MagicBandBroadcast)
+    def new_action_magicband_tx(address: str, port: int = -1, command: str = "send",
+                                data: str = None, delay: float = 0):
+        action = SequenceAction(ActionType.MagicBandTX)
         action.address = address
+        action.port = port if isinstance(port, int) else -1
+        action.command = command
         action.data = data
         action.delay = delay
         return action
@@ -294,8 +305,8 @@ class SequenceAction:
             return self.performBrightSignAction()
         elif self.type == ActionType.ChromaTeq:
             return self.performChromaTeqAction()
-        elif self.type == ActionType.MagicBandBroadcast:
-            return self.performMagicBandBroadcastAction()
+        elif self.type == ActionType.MagicBandTX:
+            return self.performMagicBandTxAction()
         elif self.type == ActionType.GPIOClosure:
             return self.performGPIOClosureAction(gpioManager, cancel_event)
         elif self.type == ActionType.PiPlayer:
@@ -427,28 +438,106 @@ class SequenceAction:
         print("Finished sending ChromaTeq command", flush=True)
         return True
     
-    def performMagicBandBroadcastAction(self):
-        """Performs a Magic Band Broadcast action."""
-        # Check for valid address and data
-        if self.address is None or not isinstance(self.address, str):
-            print("Invalid Magic Band broadcast address", flush=True)
+    @staticmethod
+    def encodeCueParams(text):
+        """Turns "effect=color&color=21" into a safe query string, or None.
+
+        Re-encoded rather than passed through: a value containing a space or a
+        "#" would otherwise truncate the URL and send a different cue than the
+        one that was typed. Every MagicBandTX effect is reachable this way -
+        even the five-colour ones, whose device-side parser takes "21,2,25,0,8"
+        as readily as a JSON array - so the whole API fits in one field.
+
+        Each part is decoded before being re-encoded, so text copied straight
+        out of the device's own documentation ("rgb=%23FF8000") is not encoded
+        a second time into the literal characters "%23".
+        """
+        if not isinstance(text, str):
+            return None
+        text = text.strip()
+        if text.startswith("?"):
+            text = text[1:]
+        pairs = []
+        for chunk in text.split("&"):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            key, separator, value = chunk.partition("=")
+            key = unquote_plus(key.strip())
+            if not key:
+                return None
+            pairs.append((key, unquote_plus(value.strip()) if separator else ""))
+        if not pairs:
+            return None
+        return urlencode(pairs)
+
+    def buildMagicBandTxUrl(self):
+        """Returns the MagicBandTX API URL for this action, or None if unusable.
+
+        Split out from the call so the mapping can be tested without a
+        transmitter on the network.
+        """
+        host = SequenceAction.normalizeHost(self.address, self.port)
+        if host is None:
+            print("Invalid MagicBand TX address provided", flush=True)
+            return None
+        command = self.command if isinstance(self.command, str) else None
+        if command is not None:
+            command = command.strip().lower()
+        if command not in MAGICBANDTX_COMMANDS:
+            print(f"Invalid MagicBand TX command: {self.command}", flush=True)
+            return None
+        if command == "stop":
+            return f"http://{host}/api/stop"
+        if command == "play":
+            playlist = self.data.strip() if isinstance(self.data, str) else ""
+            if not playlist:
+                print("MagicBand TX play needs a playlist name", flush=True)
+                return None
+            # Playlist names are free text on the device - "My Show" is its own
+            # example - so the name is encoded rather than restricted, and
+            # decoded first so a pasted "My%20Show" is not encoded twice
+            return f"http://{host}/api/play?{urlencode({'id': unquote_plus(playlist)})}"
+        params = SequenceAction.encodeCueParams(self.data)
+        if params is None:
+            print("MagicBand TX send needs cue parameters, "
+                  "e.g. effect=color&color=21&duration=10", flush=True)
+            return None
+        return f"http://{host}/api/send?{params}"
+
+    def performMagicBandTxAction(self):
+        """Sends a cue, playlist or stop to a MagicBandTX transmitter."""
+        url = self.buildMagicBandTxUrl()
+        if url is None:
             return False
-        if self.data is None or not isinstance(self.data, str):
-            print("Invalid Magic Band broadcast data", flush=True)
-            return False
-        # Perform the action
-        print(f"Performing Magic Band Broadcast action: {self.data} to {self.address}", flush=True)
-        try:
-            # Construct URL
-            url = f"http://{self.address}/command"
-            # Make REST call
-            RestQueue().makeRestCallAsync(url, "POST", self.data, isUrlEncoded=True)
-        except Exception as e:
-            print(f"Error sending Magic Band broadcast: {e}", flush=True)
-            return False
-        # Done
-        print("Finished sending Magic Band broadcast", flush=True)
+        print(f"Performing MagicBand TX action: {self.command} to {self.address}", flush=True)
+        # The device takes parameters as a query string on GET, which is what
+        # its own documentation uses
+        RestQueue().makeRestCallAsync(url, "GET")
         return True
+
+    @staticmethod
+    def normalizeHost(address, port):
+        """Returns "host" or "host:port" for an address field, or None.
+
+        Shared by the device actions. A pasted "http://player1.local/" is
+        accepted because that is what people copy from a browser bar, and
+        silently producing "http://http://..." helps nobody. A port of -1
+        means "not set", which is the device's own default of 80.
+        """
+        if address is None or not isinstance(address, str) or not address.strip():
+            return None
+        host = address.strip()
+        for scheme in ("http://", "https://"):
+            if host.lower().startswith(scheme):
+                host = host[len(scheme):]
+                break
+        host = host.strip("/")
+        if not host:
+            return None
+        if isinstance(port, int) and port > 0 and ":" not in host:
+            host = f"{host}:{port}"
+        return host
 
     def buildPiPlayerUrl(self):
         """Returns the PiPlayer API URL for this action, or None if unusable.
@@ -456,24 +545,10 @@ class SequenceAction:
         Split out from performPiPlayerAction so the mapping can be tested
         without a player on the network.
         """
-        # Address
-        if self.address is None or not isinstance(self.address, str) or not self.address.strip():
+        host = SequenceAction.normalizeHost(self.address, self.port)
+        if host is None:
             print("Invalid PiPlayer address provided", flush=True)
             return None
-        host = self.address.strip()
-        # Tolerate a pasted "http://player1.local/" - people copy it from the
-        # browser bar, and silently producing "http://http://..." helps nobody
-        for scheme in ("http://", "https://"):
-            if host.lower().startswith(scheme):
-                host = host[len(scheme):]
-                break
-        host = host.strip("/")
-        if not host:
-            print("Invalid PiPlayer address provided", flush=True)
-            return None
-        # Port. -1 means "not set", which is PiPlayer's installed default of 80
-        if isinstance(self.port, int) and self.port > 0 and ":" not in host:
-            host = f"{host}:{self.port}"
         # Command
         command = self.command if isinstance(self.command, str) else None
         if command is not None:
