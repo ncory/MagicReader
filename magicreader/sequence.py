@@ -78,8 +78,11 @@ class Sequence:
         else:
             print("ERROR: Action must be a SequenceAction object", flush=True)
     
-    def play(self, wled, soundManager, gpioManager = None, cancel_event = None):
-        """Plays the sequence by executing all actions in order."""
+    def play(self, wled, soundManager, gpioManager = None, cancel_event = None, band_id = None):
+        """Plays the sequence by executing all actions in order.
+
+        band_id is the band that started it, if any - see BAND_ID_VARIABLE.
+        """
         # Log sequence with name
         if self.name is not None and isinstance(self.name, str):
             print(f"Playing sequence: {self.name} ({self.id})", flush=True)
@@ -89,7 +92,7 @@ class Sequence:
                 print(f"Sequence cancelled: {self.name} ({self.id})", flush=True)
                 return False
             if isinstance(action, SequenceAction):
-                if not action.performAction(wled, soundManager, gpioManager, cancel_event):
+                if not action.performAction(wled, soundManager, gpioManager, cancel_event, band_id):
                     return False
             else:
                 print("ERROR: Action must be a SequenceAction object", flush=True)

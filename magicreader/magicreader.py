@@ -616,7 +616,7 @@ class MagicBand():
             self.onError("Found no sequence to run!")
             return
         # Run sequence
-        if not self.playSequence(seq_id):
+        if not self.playSequence(seq_id, band_id):
             # Error!
             self.onError("Failed to playback sequence")
     
@@ -683,8 +683,11 @@ class MagicBand():
         self.soundManager.stopAllSounds()
         return True
 
-    def playSequence(self, id: str):
-        """Starts playback for the selected sequence in a background thread."""
+    def playSequence(self, id: str, band_id: str = None):
+        """Starts playback for the selected sequence in a background thread.
+
+        band_id is the band that was read, when a tap started it.
+        """
         # Get sequence from sequence manager
         sequence = self.sequence_manager.getSequenceById(id)
         if sequence is None or not isinstance(sequence, Sequence):
@@ -697,7 +700,7 @@ class MagicBand():
             cancel_event = threading.Event()
             thread = threading.Thread(
                 target=self.runSequence,
-                args=(id, sequence, cancel_event),
+                args=(id, sequence, cancel_event, band_id),
                 daemon=True
             )
             self.active_sequence = sequence
@@ -714,10 +717,10 @@ class MagicBand():
         thread.start()
         return True
 
-    def runSequence(self, id: str, sequence: Sequence, cancel_event: threading.Event):
+    def runSequence(self, id: str, sequence: Sequence, cancel_event: threading.Event, band_id: str = None):
         success = False
         try:
-            success = sequence.play(self.wledManager, self.soundManager, self.gpioManager, cancel_event)
+            success = sequence.play(self.wledManager, self.soundManager, self.gpioManager, cancel_event, band_id)
         except Exception as e:
             print(f"Error playing sequence {id}: {e}", flush=True)
             success = False

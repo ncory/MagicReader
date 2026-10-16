@@ -48,6 +48,11 @@ first cascade level and returns a decimal number such as `584188126650`. For a
 MagicBands could share an ID. **Bands saved under those old numbers no longer
 match - re-link them on the Bands page with Read New Band.**
 
+An action can pass the tapped band on: `{band_id}` anywhere in its URL, value
+or command is replaced with the band's ID when the sequence runs, e.g.
+`http://host/hit?band={band_id}`. It is replaced with nothing when the
+sequence is played from the web UI rather than by a tap.
+
 `rfid-testing/compare-readers.py` reads bands on the MFRC522 and a PC/SC reader
 (such as an ACS ACR1555U on USB) side by side and reports whether the UIDs
 agree. See the docstring at the top of the script for setup.

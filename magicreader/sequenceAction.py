@@ -1,4 +1,5 @@
 from enum import Enum
+import copy
 import math
 import re
 from rest import RestQueue
@@ -42,6 +43,12 @@ PIPLAYER_PLAYLIST_ID = re.compile(r"^[a-z0-9_-]{1,64}$")
 
 # loop-item takes enabled=toggle|true|false. The UI offers these three words.
 PIPLAYER_LOOP_MODES = {"toggle": "toggle", "on": "true", "off": "false"}
+
+# Replaced with the ID of the band that started the sequence, wherever it
+# appears in an action's URL, value or command - "http://host/hit?band={band_id}".
+# A plain substring, not str.format(), so the braces in a JSON value are left
+# alone.
+BAND_ID_VARIABLE = "{band_id}"
 
 
 @dataclass
@@ -276,8 +283,12 @@ class SequenceAction:
         action.delay = delay
         return action
 
-    def performAction(self, wled: WLEDManager, soundManager: SoundManager, gpioManager: GPIOManager = None, cancel_event = None):
-        """Performs the action based on its type."""
+    def performAction(self, wled: WLEDManager, soundManager: SoundManager, gpioManager: GPIOManager = None, cancel_event = None, band_id: str = None):
+        """Performs the action based on its type.
+
+        band_id is the band that started the sequence, for BAND_ID_VARIABLE;
+        None when the sequence was started some other way.
+        """
         # Check for delay
         if self.delay > 0:
             if cancel_event is not None:
@@ -288,32 +299,67 @@ class SequenceAction:
                 time.sleep(self.delay)
         if cancel_event is not None and cancel_event.is_set():
             return False
+        # Performed on a copy, so the stored sequence keeps its variables for
+        # the next tap
+        action = self.withBandId(band_id)
         # Which action type?
-        if self.type == ActionType.WLEDInternal:
-            return self.performWLEDInternalAction(wled)
-        elif self.type == ActionType.Delay:
+        if action.type == ActionType.WLEDInternal:
+            return action.performWLEDInternalAction(wled)
+        elif action.type == ActionType.Delay:
             return True
-        elif self.type == ActionType.WLEDExternal:
-            return self.performWLEDAction()
-        elif self.type == ActionType.SoundFile:
-            return self.performSoundFileAction(soundManager)
-        elif self.type == ActionType.MusicFile:
-            return self.performMusicFileAction(soundManager)
-        if self.type == ActionType.URL:
-            return self.performUrlAction()
-        elif self.type == ActionType.BrightSign:
-            return self.performBrightSignAction()
-        elif self.type == ActionType.ChromaTeq:
-            return self.performChromaTeqAction()
-        elif self.type == ActionType.MagicBandTX:
-            return self.performMagicBandTxAction()
-        elif self.type == ActionType.GPIOClosure:
-            return self.performGPIOClosureAction(gpioManager, cancel_event)
-        elif self.type == ActionType.PiPlayer:
-            return self.performPiPlayerAction()
+        elif action.type == ActionType.WLEDExternal:
+            return action.performWLEDAction()
+        elif action.type == ActionType.SoundFile:
+            return action.performSoundFileAction(soundManager)
+        elif action.type == ActionType.MusicFile:
+            return action.performMusicFileAction(soundManager)
+        if action.type == ActionType.URL:
+            return action.performUrlAction()
+        elif action.type == ActionType.BrightSign:
+            return action.performBrightSignAction()
+        elif action.type == ActionType.ChromaTeq:
+            return action.performChromaTeqAction()
+        elif action.type == ActionType.MagicBandTX:
+            return action.performMagicBandTxAction()
+        elif action.type == ActionType.GPIOClosure:
+            return action.performGPIOClosureAction(gpioManager, cancel_event)
+        elif action.type == ActionType.PiPlayer:
+            return action.performPiPlayerAction()
         else:
-            print(f"Unknown action type: {self.type}", flush=True)
+            print(f"Unknown action type: {action.type}", flush=True)
             return False
+
+    @staticmethod
+    def replaceBandId(value, band_id: str):
+        """value with BAND_ID_VARIABLE replaced, looking inside lists and
+        dicts too - a URL action's value is stored as parsed JSON when it is
+        valid JSON. Anything that is not text is returned unchanged."""
+        if isinstance(value, str):
+            return value.replace(BAND_ID_VARIABLE, band_id)
+        if isinstance(value, list):
+            return [SequenceAction.replaceBandId(item, band_id) for item in value]
+        if isinstance(value, dict):
+            return {key: SequenceAction.replaceBandId(item, band_id) for key, item in value.items()}
+        return value
+
+    def withBandId(self, band_id: str):
+        """This action with BAND_ID_VARIABLE filled in, or itself if it has none.
+
+        The variable becomes an empty string when there is no band - a
+        sequence played from the web UI - and that is logged, since a URL
+        ending "?band=" is otherwise a puzzle.
+        """
+        fields = ("url", "data", "command")
+        resolved = {name: SequenceAction.replaceBandId(getattr(self, name), band_id or "")
+                    for name in fields}
+        if all(resolved[name] == getattr(self, name) for name in fields):
+            return self
+        if not band_id:
+            print(f"No band read started this sequence - {BAND_ID_VARIABLE} is empty", flush=True)
+        action = copy.copy(self)
+        for name, value in resolved.items():
+            setattr(action, name, value)
+        return action
     
     def performWLEDInternalAction(self, wled: WLEDManager):
         # Cache internal WLED address
