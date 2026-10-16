@@ -1,5 +1,6 @@
 from enum import Enum
 import copy
+import json
 import math
 import re
 from rest import RestQueue
@@ -427,10 +428,24 @@ class SequenceAction:
             print(f"Invalid HTTP method: {self.method}", flush=True)
             return False
         # Make REST call
+        body, isJson, isUrlEncoded = SequenceAction.encodeUrlBody(self.data)
         print(f"Performing URL action: {self.url} with method {self.method}", flush=True)
-        RestQueue().makeRestCallAsync(self.url, self.method, self.data)
-        #RestHelpers.makeRestCall(self.url, self.method, self.data)
+        RestQueue().makeRestCallAsync(self.url, self.method, body, isJson, isUrlEncoded)
         return True
+
+    @staticmethod
+    def encodeUrlBody(data):
+        """Returns (body, isJson, isUrlEncoded) for a URL action's value.
+
+        The editor stores the value as parsed JSON when it parses, so anything
+        that is not a string was JSON and goes back out as JSON. Other text is
+        sent exactly as typed, as a form body - "band={band_id}&source=reader".
+        """
+        if data is None or data == "":
+            return None, False, False
+        if isinstance(data, str):
+            return data, False, True
+        return json.dumps(data), True, False
     
     def performBrightSignAction(self):
         """Performs a BrightSign action."""

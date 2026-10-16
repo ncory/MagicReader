@@ -1045,7 +1045,8 @@ function updateActionRowForType(row) {
         port.prop('disabled', true).val('');
     } else if (type === "url") {
         target.attr('placeholder', 'URL');
-        value.prop('disabled', false);
+        // Sent as JSON when it parses as JSON, otherwise as typed form data
+        value.prop('disabled', false).attr('placeholder', 'Body: JSON or a=1&b=2');
         port.prop('disabled', true).val('');
     } else if (type === "wledInternal") {
         target.prop('disabled', true).val('').attr('placeholder', 'Internal WLED');

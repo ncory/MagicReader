@@ -81,6 +81,10 @@ class RestHelpers:
             else:
                 message_headers = {}
                 body = None
+            # The headers promise UTF-8. A str body would go out as Latin-1,
+            # and fail outright on anything Latin-1 cannot hold.
+            if isinstance(body, str):
+                body = body.encode("utf-8")
             # Make HTTP call
             response = RestHelpers._http_obj.request(
                 uri = url,
