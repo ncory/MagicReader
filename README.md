@@ -165,6 +165,8 @@ Playlist ids are checked against PiPlayer's own rule (lowercase letters, digits,
 `-` and `_`, up to 64 characters) before the id goes into a URL path. Anything
 else is refused with a line in the log rather than sent, which keeps a stray
 `../` out of the path and turns a typo into a clear message instead of a 404.
+The id is lowercased first, since PiPlayer's ids are always lowercase - so
+`band-{band_id}` plays the playlist `band-0453652ac05f80` for that band.
 
 The transition is PiPlayer's to choose: a `play` cue with no transition of its
 own falls back to the target playlist's, so set it there. For anything more

@@ -90,9 +90,20 @@ class RejectionTests(unittest.TestCase):
         # The id goes straight into a URL path. Without this, a sequence could
         # reach any PiPlayer endpoint, including system ones.
         for bad in ("../../api/system/restart-renderer", "a/b", "a?x=1",
-                    "a#b", "UPPER", "with space", "x" * 65, "a%2Fb"):
+                    "a#b", "with space", "x" * 65, "a%2Fb", "../UPPER"):
             with self.subTest(playlist=bad):
                 self.assertIsNone(url(command="play", data=bad))
+
+    def test_an_uppercase_playlist_id_is_sent_lowercase(self):
+        # PiPlayer stores ids lowercase and matches exactly, so uppercase can
+        # only mean the lowercase id - and a {band_id} is uppercase hex
+        self.assertEqual(url(command="play", data="Lobby"),
+                         "http://player1.local/api/playlists/lobby/play")
+
+    def test_a_band_id_selects_the_playlist_named_after_the_band(self):
+        action = SequenceAction.new_action_piplayer("player1.local", -1, "play", "band-{band_id}")
+        self.assertEqual(action.withBandId("0453652AC05F80").buildPiPlayerUrl(),
+                         "http://player1.local/api/playlists/band-0453652ac05f80/play")
 
     def test_a_valid_playlist_id_is_accepted(self):
         for good in ("lobby", "zz-test", "a_b-2", "x", "9", "x" * 64):

@@ -39,7 +39,9 @@ PIPLAYER_COMMANDS = ("play", "stop", "next", "previous",
 # PiPlayer playlist ids: "1-64 characters: lowercase letters, digits, - and _"
 # (its API.md). The id goes into a URL path, so anything else is refused rather
 # than sent - a clear log line beats a mystery 404, and it keeps a stray "../"
-# out of the path.
+# out of the path. Checked after lowercasing: PiPlayer stores ids lowercase
+# and matches them exactly, so "Lobby" or a {band_id} (uppercase hex) could
+# only ever mean the lowercase id.
 PIPLAYER_PLAYLIST_ID = re.compile(r"^[a-z0-9_-]{1,64}$")
 
 # loop-item takes enabled=toggle|true|false. The UI offers these three words.
@@ -620,7 +622,7 @@ class SequenceAction:
         # play carries an optional playlist id; with none, PiPlayer resumes or
         # restarts the last/default playlist, which is a useful cue in itself
         if command == "play":
-            playlist = self.data.strip() if isinstance(self.data, str) else ""
+            playlist = self.data.strip().lower() if isinstance(self.data, str) else ""
             if not playlist:
                 return f"http://{host}/api/play"
             if not PIPLAYER_PLAYLIST_ID.match(playlist):
