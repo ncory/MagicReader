@@ -221,6 +221,11 @@ class Mfrc522Uid:
                 raise NoTag()
             if time.monotonic() > deadline:
                 raise NoTag()
+            # Polling an empty field means waiting out the whole ~15 ms
+            # timeout on every pass; spinning on SPI for it held a quarter of
+            # a Pi 4 core. A tag answers within a millisecond, so this costs a
+            # read almost nothing.
+            time.sleep(0.0005)
         self.clearBits(BitFramingReg, 0x80)
 
         error = self.read(ErrorReg)
