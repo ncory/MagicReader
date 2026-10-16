@@ -21,7 +21,6 @@ dependencies = [
     "waitress",
     "httplib2",
     "spidev",
-    "mfrc522",
     "pyserial",
     "pygame",
     "ordered_enum"

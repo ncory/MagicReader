@@ -91,16 +91,6 @@ fi
 ##### Install PIP package requirements
 pip install "$GPIO_PACKAGE" pygame Flask waitress httplib2 spidev ordered_enum pyserial
 
-# mfrc522 declares install_requires = ["RPi.GPIO", "spidev"]. Installing it
-# normally would therefore drag in the classic RPi.GPIO alongside rpi-lgpio,
-# and the two cannot coexist - both provide a module named RPi.GPIO, so the
-# second to install silently clobbers the first. Install it without its
-# dependencies; spidev is installed above, and the GPIO package chosen above
-# provides the RPi.GPIO module it actually imports. pip will warn that
-# "mfrc522 requires RPi.GPIO, which is not installed" - that warning is
-# expected and wrong, since it checks distribution names, not module names.
-pip install --no-deps mfrc522
-
 ##### Confirm the GPIO backend actually imports before going further
 if ! python -c "import RPi.GPIO" 2>/dev/null; then
     echo "ERROR: '$GPIO_PACKAGE' installed but 'import RPi.GPIO' failed." >&2

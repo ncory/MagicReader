@@ -36,6 +36,22 @@ The app logs the backend it detected at startup, e.g.
 `GPIO backend: rpi-lgpio 0.6 (lgpio), device: /dev/gpiochip0`. Check that line
 first if the reader does not come up.
 
+## Band IDs
+A band's ID is its full UID in uppercase hex - `0453652AC05F80` for a
+MagicBand, `3611EE94` for a typical MIFARE Classic bracelet - the same value a
+phone or a PC/SC reader shows. `magicreader/mfrc522Uid.py` reads it through
+the MFRC522's full ISO 14443-3 cascade.
+
+Earlier versions used the `mfrc522` package, whose `read_id()` stops after the
+first cascade level and returns a decimal number such as `584188126650`. For a
+7-byte UID that is only the first three bytes plus a checksum, so different
+MagicBands could share an ID. **Bands saved under those old numbers no longer
+match - re-link them on the Bands page with Read New Band.**
+
+`rfid-testing/compare-readers.py` reads bands on the MFRC522 and a PC/SC reader
+(such as an ACS ACR1555U on USB) side by side and reports whether the UIDs
+agree. See the docstring at the top of the script for setup.
+
 ## Audio
 Sound goes `pygame.mixer` -> SDL2 -> an audio driver -> the hardware. SDL picks
 the driver itself, trying `pulseaudio` before `alsa` and taking the first that

@@ -1,6 +1,6 @@
 import rfid
 from helpers import AppEvent, AppEventType, CancelReadException
-from mfrc522 import SimpleMFRC522
+from mfrc522Uid import Mfrc522Uid, NoTag, ReadError
 from os import path
 import RPi.GPIO as GPIO
 import gpioBackend
@@ -16,12 +16,13 @@ class RfidMfrc522(rfid.RfidReader):
     VERSION_REG = 0x37
     STARTUP_TIMEOUT_SECONDS = 30
     VALID_VERSION_VALUES = {0x88, 0x90, 0x91, 0x92}
+    POLL_INTERVAL_SECONDS = 0.05
 
     def __init__(self, app, port:str = None):
         super().__init__(app, port)
-        # Create RFID reader and fix logging level
-        self.reader = SimpleMFRC522()
-        self.reader.READER.logger.setLevel('CRITICAL')
+        # waitForMfrc522Hardware() has already pulsed the reset line, so the
+        # reader is opened without touching it again.
+        self.reader = Mfrc522Uid(self.SPI_BUS, self.SPI_DEVICE_NUMBER)
 
     @classmethod
     def waitForMfrc522Hardware(cls):
@@ -114,26 +115,18 @@ class RfidMfrc522(rfid.RfidReader):
 
     def runReaderThread(self):
         print("Starting RFID read thread", flush=True)
+        print("RFID:: Waiting for RFID....", flush=True)
         while self.app.is_active:
-            # Perform RFID read
-            print("RFID:: Waiting for RFID....", flush=True)
-            id = None
             try:
-                id = self.reader.read_id()
-                if id is None:
-                    continue
-                # How long since last read?
-                now = datetime.datetime.now()
-                diff = now - self.lastReadTime
-                if (diff > self.timeDelta):
-                    # Enough time has passed, allow read
-                    print(f"RFID:: Read RFID: {id}", flush=True)
-                    # Pass to event queue
-                    read = rfid.RfidRead(id, self.isDisneyBand(id))
-                    event = AppEvent(AppEventType.ReadRfid, read)
-                    self.app.event_queue.put((5, event))
-                    # Update last read time
-                    self.lastReadTime = now
+                # readTag() halts the band once it has been read, so one tap
+                # gives one read however long the band is held there.
+                tag = self.reader.readTag()
+            except (NoTag, ReadError):
+                # NoTag is an empty field. ReadError is usually a band at the
+                # edge of the field answering only part of the exchange; the
+                # next poll normally reads it cleanly.
+                time.sleep(self.POLL_INTERVAL_SECONDS)
+                continue
             except CancelReadException:
                 print("RFID:: Got CancelReadException!!", flush=True)
                 return
@@ -142,50 +135,53 @@ class RfidMfrc522(rfid.RfidReader):
                     return
                 print("RFID:: Error reading RFID", flush=True)
                 print (e, flush=True)
-    
-    def stop(self):
-        self.reader.READER.Close_MFRC522()
-    
-    # SimpleMFRC522.read_id() runs a single anticollision cascade and packs the
-    # five bytes it gets back into one integer: the cascade tag (0x88), the
-    # first three UID bytes, and the BCC checksum. For any 7-byte NXP tag -
-    # which every MagicBand is - those bytes are 0x88, 0x04, then the UID, so
-    # the value always falls in 0x8804000000..0x8804FFFFFF. That is 584182661120
-    # to 584199438335 in decimal, which is where the old "5841" prefix came from.
-    UID_CASCADE_NXP_MIN = 0x8804000000
-    UID_CASCADE_NXP_MAX = 0x8804FFFFFF
+                time.sleep(self.POLL_INTERVAL_SECONDS)
+                continue
 
-    def isDisneyBand(self, id) -> bool:
-        # Only one test is possible here - see isIdMagicBandPlus() for why
-        # MagicBand+ cannot be told apart from a MagicBand 2 at this layer.
-        return RfidMfrc522.isIdMagicBandOrMagicBand2(id)
+            id = tag.uid.hex().upper()
+            # How long since last read?
+            now = datetime.datetime.now()
+            diff = now - self.lastReadTime
+            if (diff > self.timeDelta):
+                # Enough time has passed, allow read
+                print(f"RFID:: Read RFID: {id}", flush=True)
+                # Pass to event queue
+                read = rfid.RfidRead(id, self.isDisneyBand(id))
+                event = AppEvent(AppEventType.ReadRfid, read)
+                self.app.event_queue.put((5, event))
+                # Update last read time
+                self.lastReadTime = now
+                print("RFID:: Waiting for RFID....", flush=True)
+
+    def stop(self):
+        self.reader.close()
+
+    # Band IDs are the tag's full UID as uppercase hex, e.g. "0453652AC05F80".
+    # Every MagicBand has a 7-byte NXP UID - first byte 0x04, NXP's
+    # manufacturer code - ending in 0x80 on a MagicBand 2 and 0x90 on a
+    # MagicBand+.
+    NXP_MANUFACTURER_CODE = 0x04
+    MAGICBAND_PLUS_LAST_BYTE = 0x90
 
     @staticmethod
-    def isIdMagicBandOrMagicBand2(id) -> bool:
-        """True if the id looks like a 7-byte NXP UID read at cascade level 1.
+    def uidFromId(id) -> bytes | None:
+        try:
+            return bytes.fromhex(id)
+        except (TypeError, ValueError):
+            return None
+
+    def isDisneyBand(self, id) -> bool:
+        """True for a 7-byte NXP UID.
 
         Note this identifies the tag family, not Disney specifically: any
-        7-byte NXP tag (NTAG, MIFARE Ultralight) lands in the same range.
+        7-byte NXP tag (NTAG, MIFARE Ultralight, DESFire) passes too.
         """
-        try:
-            value = int(id)
-        except (TypeError, ValueError):
-            return False
-        return RfidMfrc522.UID_CASCADE_NXP_MIN <= value <= RfidMfrc522.UID_CASCADE_NXP_MAX
+        uid = RfidMfrc522.uidFromId(id)
+        return uid is not None and len(uid) == 7 and uid[0] == RfidMfrc522.NXP_MANUFACTURER_CODE
 
     @staticmethod
     def isIdMagicBandPlus(id) -> bool:
-        """Always False - MagicBand+ cannot be detected with this reader setup.
-
-        A MagicBand+ is distinguished from a MagicBand 2 by the last byte of
-        its full 7-byte UID (0x90 rather than 0x80). read_id() only performs
-        cascade level 1, so it never sees bytes 3-6 and that byte is simply not
-        available. Telling them apart would need a second cascade level, which
-        the mfrc522 library's MFRC522_Anticoll() does not implement.
-
-        Kept as a named no-op so the intent is documented rather than looking
-        like an oversight. The previous implementation matched
-        "04[0-9a-zA-Z]+90" against the decimal id, which could never match:
-        str(int) never starts with a zero.
-        """
-        return False
+        uid = RfidMfrc522.uidFromId(id)
+        return (uid is not None and len(uid) == 7
+                and uid[0] == RfidMfrc522.NXP_MANUFACTURER_CODE
+                and uid[-1] == RfidMfrc522.MAGICBAND_PLUS_LAST_BYTE)

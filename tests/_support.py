@@ -54,11 +54,9 @@ def installHardwareStubs():
         setattr(gpio, fn_name, _record(fn_name))
     gpio.getmode = lambda: None
 
-    # --- spidev / mfrc522 ------------------------------------------------
+    # --- spidev ----------------------------------------------------------
     spidev = _stubModule("spidev")
     spidev.SpiDev = lambda *a, **k: None
-    mfrc522 = _stubModule("mfrc522")
-    mfrc522.SimpleMFRC522 = object
 
     # --- pygame ----------------------------------------------------------
     pygame = _stubModule("pygame")
