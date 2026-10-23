@@ -9,6 +9,7 @@ import threading
 import queue
 from helpers import State, AppEvent, AppEventType, SettingValueError
 from bandManager import BandManager
+from batchAdd import BatchAdd
 from sequenceManager import SequenceManager
 from soundManager import SoundManager
 from rfid import RfidRead
@@ -154,6 +155,7 @@ class MagicBand():
     def __init__(self):
         # Create managers
         self.band_manager = BandManager()
+        self.batch_add = BatchAdd(self.band_manager)
         self.sequence_manager = SequenceManager()
         self.soundManager = SoundManager()
         self.wledManager = WLEDManager(settings['wled_address'])
@@ -504,6 +506,11 @@ class MagicBand():
                 # What type of event?
                 if event.type == AppEventType.ReadRfid:
                     # READ RFID
+                    # Batch-adding bands from the web UI? Then every tap is
+                    # captured there and nothing plays.
+                    if self.batch_add.isActive():
+                        self.batch_add.capture(event.data.id, event.data.isDisney)
+                        continue
                     # Are we looking for a read once?
                     if self.read_once_enabled:
                         # Accept this as our result

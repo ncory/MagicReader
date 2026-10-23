@@ -2380,6 +2380,139 @@ function buttonBulkAssignSave() {
 }
 
 
+/////// Batch Add Bands ///////
+
+// {lastSeq, added, timer} while batch add is on, otherwise null
+var batchAdd = null;
+const BATCH_ADD_POLL_MS = 500;
+
+function buttonBatchAddStart() {
+    makeApiCall('/bands/batch/start', 'POST',
+        function(response, textStatus, jqXHR) {
+            if (!isDict(response) || response.result !== "ok") {
+                alert("Failed to start batch add. Server returned an error.");
+                return;
+            }
+            batchAdd = {lastSeq: 0, added: 0, timer: null};
+            $('#batchAddList').empty();
+            $('#addNewBandDiv').toggleClass('d-none', true);
+            $('#readNewBand-result').text('');
+            setBatchAddStatus(null);
+            updateBatchAddCount();
+            setBatchAddControls(true);
+            pollBatchAdd();
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            console.debug("ERROR starting batch add:" + errorThrown);
+            alert("Failed to start batch add. Error contacting server.");
+        });
+}
+
+function setBatchAddControls(active) {
+    $('#button-readNewBand, #button-addNewBand, #button-batchAdd').prop('disabled', active);
+    $('#batchAddDiv').toggleClass('d-none', !active);
+}
+
+function setBatchAddStatus(problem) {
+    let status = $('#batchAddStatus').empty();
+    if (problem) {
+        status.append($('<span class="text-danger">').text(problem));
+    } else {
+        status.append($('<span class="spinner-grow spinner-grow-sm text-primary" role="status">'));
+        status.append(document.createTextNode(" Listening - tap bands on the reader one at a time."));
+    }
+}
+
+function updateBatchAddCount() {
+    let added = batchAdd != null ? batchAdd.added : 0;
+    $('#batchAddCount').text(added + " added");
+}
+
+function scheduleBatchAddPoll() {
+    if (batchAdd != null) batchAdd.timer = setTimeout(pollBatchAdd, BATCH_ADD_POLL_MS);
+}
+
+function pollBatchAdd() {
+    if (batchAdd == null) return;
+    makeApiCall('/bands/batch?after=' + batchAdd.lastSeq, 'GET',
+        function(response, textStatus, jqXHR) {
+            // Done may have been pressed while this was in flight
+            if (batchAdd == null) return;
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (!isDict(data)) {
+                setBatchAddStatus("Unexpected reply from the reader - retrying...");
+                scheduleBatchAddPoll();
+                return;
+            }
+            setBatchAddStatus(null);
+            let addedAny = false;
+            (data.reads instanceof Array ? data.reads : []).forEach((read) => {
+                if (!isDict(read)) return;
+                if (Number.isInteger(read.seq)) batchAdd.lastSeq = Math.max(batchAdd.lastSeq, read.seq);
+                if (read.status === "added") {
+                    batchAdd.added += 1;
+                    addedAny = true;
+                }
+                addBatchAddRead(read);
+            });
+            updateBatchAddCount();
+            if (addedAny) getKnownBandsList();
+            if (data.active !== true) {
+                // The reader ended it - it stops on its own if polling stops
+                // for long enough, e.g. while this laptop was asleep
+                endBatchAdd("Batch add ended because this page stopped checking in. Press Batch Add Bands to start again.");
+                return;
+            }
+            scheduleBatchAddPoll();
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            if (batchAdd == null) return;
+            console.debug("ERROR polling batch add:" + errorThrown);
+            setBatchAddStatus("Lost contact with the reader - retrying...");
+            scheduleBatchAddPoll();
+        });
+}
+
+function addBatchAddRead(read) {
+    let id = getStringFromDict(read, 'id') || "";
+    let name = getStringFromDict(read, 'name');
+    let item = $('<div class="list-group-item d-flex justify-content-between align-items-center gap-2">');
+    item.append($('<span class="font-monospace text-break">').text(id));
+    let badge = $('<span class="badge">');
+    if (read.status === "added") {
+        badge.addClass('text-bg-success').text("Added");
+    } else if (read.status === "known") {
+        badge.addClass('text-bg-secondary').text(name && name !== id ? "Already known as " + name : "Already on the list");
+    } else {
+        badge.addClass('text-bg-danger').text("Save failed");
+    }
+    item.append(badge);
+    // Newest first, so the latest tap is always in view
+    $('#batchAddList').prepend(item);
+}
+
+function buttonBatchAddDone() {
+    makeApiCall('/bands/batch/stop', 'POST');
+    endBatchAdd(null);
+}
+
+function endBatchAdd(message) {
+    if (batchAdd == null) return;
+    clearTimeout(batchAdd.timer);
+    let added = batchAdd.added;
+    batchAdd = null;
+    setBatchAddControls(false);
+    getKnownBandsList();
+    $('#readNewBand-result').text(message || ("Batch add finished: " + added + (added === 1 ? " band" : " bands") + " added."));
+}
+
+// Leaving the page ends batch add straight away rather than after the
+// reader's idle timeout, so taps go back to playing sequences
+window.addEventListener('pagehide', function() {
+    if (batchAdd != null && navigator.sendBeacon) navigator.sendBeacon('/bands/batch/stop');
+});
+
+
 /////// System Control Modals ///////
 
 function showControlModalMagicWand() {

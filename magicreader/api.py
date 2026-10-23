@@ -862,6 +862,23 @@ def RunMagicApi(magicreader: MagicBand, port=80):
         else:
             return {"result": "error"}
     
+    @app.route('/bands/batch/start', methods=['POST'])
+    def post_bandsBatchStart():
+        magicreader.batch_add.start()
+        return {"result": "ok"}
+
+    @app.route('/bands/batch', methods=['GET'])
+    def get_bandsBatch():
+        # Reads after sequence number ?after=N. Polling is also what keeps the
+        # mode alive - see BatchAdd.IDLE_TIMEOUT_SECONDS.
+        after = request.args.get('after', default=0, type=int)
+        return {"result": "ok", "data": magicreader.batch_add.poll(after)}
+
+    @app.route('/bands/batch/stop', methods=['POST'])
+    def post_bandsBatchStop():
+        magicreader.batch_add.stop()
+        return {"result": "ok"}
+
     @app.route('/bands/read', methods=['PUT'])
     def put_bandsRead():
         # Ask app to read a single RFID. Returns None if nothing was tapped

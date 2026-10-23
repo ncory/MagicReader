@@ -91,6 +91,11 @@ body {
     overflow-y: auto;
 }
 
+.batch-add-list {
+    max-height: 20rem;
+    overflow-y: auto;
+}
+
 .sequence-actions-table .form-control,
 .sequence-actions-table .form-select {
     min-width: 0;

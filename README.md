@@ -58,6 +58,13 @@ A URL action's value is its request body: sent as JSON
 `{"band": "{band_id}"}`, and otherwise exactly as typed as form data, such as
 `band={band_id}&source=reader`. Leave it empty to send no body.
 
+To add a stack of bands at once, press **Batch Add Bands** on the Bands page
+and tap them on the reader one at a time. Each new band is saved with its ID
+as its nickname and no sequences; one already on the list is left alone. Taps
+don't play sequences until you press **Done**, and the mode ends on its own if
+the page stops checking in for 30 seconds. Then give them names and sequences
+with Edit, or several at once with **Assign Sequences**.
+
 `rfid-testing/compare-readers.py` reads bands on the MFRC522 and a PC/SC reader
 (such as an ACS ACR1555U on USB) side by side and reports whether the UIDs
 agree. See the docstring at the top of the script for setup.

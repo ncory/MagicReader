@@ -15,6 +15,7 @@ class RfidReader:
         self.port = port
         self.reader_thread = None
         self.lastReadTime = datetime.datetime.now()
+        self.lastReadId = None
         self.timeDelta = datetime.timedelta(seconds=3)
 
     def start(self) -> bool:

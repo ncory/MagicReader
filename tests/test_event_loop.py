@@ -13,6 +13,8 @@ import unittest
 
 import _support  # noqa: F401
 import magicreader
+from bandManager import BandManager
+from batchAdd import BatchAdd
 from helpers import AppEvent, AppEventType, State
 
 
@@ -33,6 +35,8 @@ def makeApp():
     app.state = State.WaitingForTap
     app.status = None
     app.isError = False
+    app.band_manager = BandManager()
+    app.batch_add = BatchAdd(app.band_manager)
     # Neutralise everything the loop calls that would touch hardware or timers
     app.resetInactiveTimer = lambda: None
     app.startWaitModeTimer = lambda *a, **k: None

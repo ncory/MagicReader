@@ -139,10 +139,12 @@ class RfidMfrc522(rfid.RfidReader):
                 continue
 
             id = tag.uid.hex().upper()
-            # How long since last read?
+            # The same band again within timeDelta is a bounce at the edge of
+            # the field, not a new tap. A different band always counts, so
+            # several bands tapped in quick succession are all read.
             now = datetime.datetime.now()
             diff = now - self.lastReadTime
-            if (diff > self.timeDelta):
+            if id != self.lastReadId or diff > self.timeDelta:
                 # Enough time has passed, allow read
                 print(f"RFID:: Read RFID: {id}", flush=True)
                 # Pass to event queue
@@ -151,6 +153,7 @@ class RfidMfrc522(rfid.RfidReader):
                 self.app.event_queue.put((5, event))
                 # Update last read time
                 self.lastReadTime = now
+                self.lastReadId = id
                 print("RFID:: Waiting for RFID....", flush=True)
 
     def stop(self):

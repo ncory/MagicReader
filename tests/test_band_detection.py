@@ -82,6 +82,7 @@ class ReaderThreadTests(unittest.TestCase):
         reader.app = app
         reader.timeDelta = datetime.timedelta(seconds=3)
         reader.lastReadTime = datetime.datetime.now() - datetime.timedelta(seconds=10)
+        reader.lastReadId = None
         reader.POLL_INTERVAL_SECONDS = 0
         reader.reader = FakeChip(app, outcomes)
         reader.runReaderThread()
@@ -105,9 +106,16 @@ class ReaderThreadTests(unittest.TestCase):
         events = self.runThread([ReadError("weak"), ReadError("weak"), self.tag("04BEA3F2B41190")])
         self.assertEqual([e.id for e in events], ["04BEA3F2B41190"])
 
-    def test_a_second_band_within_the_debounce_time_is_dropped(self):
-        events = self.runThread([self.tag("0453652AC05F80"), self.tag("3611EE94", sak=0x08)])
+    def test_the_same_band_again_within_the_debounce_time_is_dropped(self):
+        # A band at the edge of the field drops out and comes back - one tap
+        events = self.runThread([self.tag("0453652AC05F80"), NoTag(), self.tag("0453652AC05F80")])
         self.assertEqual([e.id for e in events], ["0453652AC05F80"])
+
+    def test_a_different_band_within_the_debounce_time_is_read(self):
+        # Bands tapped one after another - batch adding, or a second band
+        # cancelling a sequence - must not be swallowed
+        events = self.runThread([self.tag("0453652AC05F80"), self.tag("3611EE94", sak=0x08)])
+        self.assertEqual([e.id for e in events], ["0453652AC05F80", "3611EE94"])
 
 
 if __name__ == "__main__":
