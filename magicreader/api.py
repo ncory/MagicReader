@@ -420,41 +420,38 @@ def RunMagicApi(magicreader: MagicBand, port=80):
 
     ###### Pages ######
 
+    def render_page(template):
+        hostname = platform.node()
+        return render_template(
+            template,
+            host_address=f"http://{hostname}:{port}/",
+            # The short name, for the browser tab: "hm4-reader - MagicReader"
+            hostname=hostname.split('.')[0],
+        )
+
     @app.route('/')
     def index():
-        hostname = platform.node()
-        host_url = f"http://{hostname}:{port}/"
-        return render_template("index.html", host_address=host_url)
+        return render_page("index.html")
 
     @app.route('/bands.html')
     def page_bands():
-        hostname = platform.node()
-        host_url = f"http://{hostname}:{port}/"
-        return render_template("bands.html", host_address=host_url)
+        return render_page("bands.html")
 
     @app.route('/settings.html')
     def page_settings():
-        hostname = platform.node()
-        host_url = f"http://{hostname}:{port}/"
-        return render_template("settings.html", host_address=host_url)
+        return render_page("settings.html")
 
     @app.route('/sequences.html')
     def page_sequences():
-        hostname = platform.node()
-        host_url = f"http://{hostname}:{port}/"
-        return render_template("sequences.html", host_address=host_url)
+        return render_page("sequences.html")
 
     @app.route('/sounds.html')
     def page_sounds():
-        hostname = platform.node()
-        host_url = f"http://{hostname}:{port}/"
-        return render_template("sounds.html", host_address=host_url)
+        return render_page("sounds.html")
 
     @app.route('/backup.html')
     def page_backup():
-        hostname = platform.node()
-        host_url = f"http://{hostname}:{port}/"
-        return render_template("backup.html", host_address=host_url)
+        return render_page("backup.html")
 
 
     ###### Status ######
