@@ -2513,6 +2513,51 @@ window.addEventListener('pagehide', function() {
 });
 
 
+/////// Modal Keyboard Shortcuts ///////
+
+// In an open modal, Escape clicks its Cancel button and Enter clicks the
+// button marked data-modal-default (Save, Apply). The System menu's
+// confirmations have no default on purpose: one stray Enter should not reboot
+// or shut down the reader.
+//
+// Bootstrap closes a modal on Escape by itself, but only while focus is inside
+// it - and clicking Add or Remove in a sequence picker replaces the button
+// that had focus, which drops focus to the page and Escape with it. Listening
+// on the document in the capture phase works wherever focus is, and stopping
+// the event there keeps Bootstrap from handling the same key a second time.
+document.addEventListener('keydown', function(event) {
+    if (event.key !== "Escape" && event.key !== "Enter") return;
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    let modal = $('.modal.show').last();
+    if (!modal.length) return;
+
+    if (event.key === "Escape") {
+        let cancel = modal.find('.modal-footer [data-bs-dismiss="modal"]').first();
+        if (!cancel.length) cancel = modal.find('[data-bs-dismiss="modal"]').first();
+        event.preventDefault();
+        event.stopPropagation();
+        if (cancel.length) {
+            cancel.trigger('click');
+        } else {
+            modal.modal('hide');
+        }
+        return;
+    }
+
+    // Enter keeps its usual meaning where it has one: on a focused button or
+    // link it presses that, and in a multi-line box it starts a new line
+    let target = event.target;
+    if (target.closest && target.closest('button, a, textarea, [contenteditable="true"]')) return;
+    let save = modal.find('[data-modal-default]').first();
+    if (!save.length) return;
+    // A form with one text field submits itself on Enter, reloading the page
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat || save.prop('disabled')) return;
+    save.trigger('click');
+}, true);
+
+
 /////// System Control Modals ///////
 
 function showControlModalMagicWand() {
