@@ -3,6 +3,7 @@
 var sequenceNames = null;
 var sequences = null;
 var bands = null;
+var selectedBandIds = new Set();
 var sounds = null;
 var soundDisk = null;
 var settingsConfig = null;
@@ -1878,6 +1879,7 @@ function setBandSequencePickerValue(picker, sequenceIds) {
 function refreshBandSequencePickers() {
     renderBandSequencePicker($('#newBandSequence'));
     renderBandSequencePicker($('#editBandSequence'));
+    renderBandSequencePicker($('#bulkAssignSequence'));
 }
 
 function renderBandSequencePicker(picker) {
@@ -1897,7 +1899,11 @@ function renderBandSequencePicker(picker) {
     row.append(availableList.column);
     row.append(selectedList.column);
     picker.append(row);
-    picker.append($('<div class="form-text mt-2">').text("When this band is read, the reader will randomly choose one of the selected sequences."));
+    // A picker can set its own help text through .data('helpText'); an empty
+    // string shows none
+    let helpText = picker.data('helpText');
+    if (helpText === undefined) helpText = "When this band is read, the reader will randomly choose one of the selected sequences.";
+    if (helpText) picker.append($('<div class="form-text mt-2">').text(helpText));
 
     let availableCount = 0;
     let selectedCount = 0;
@@ -1987,6 +1993,13 @@ function displayBands() {
     // Remove all existing bands frm table
     let bandsTableBody = $('#bandsTable_body');
     bandsTableBody.empty();
+    // Forget selected bands that are gone, e.g. deleted in another tab
+    let knownIds = new Set((bands instanceof Array ? bands : [])
+        .filter((band) => isDict(band) && isString(band.band_id))
+        .map((band) => band.band_id));
+    selectedBandIds.forEach((band_id) => {
+        if (!knownIds.has(band_id)) selectedBandIds.delete(band_id);
+    });
     // Do we have available bands?
     if (bands != null && bands instanceof Array) {
         /// Success
@@ -2018,11 +2031,18 @@ function displayBands() {
     } else {
         /// ERROR - Do nothing
     }
+    updateBandSelectionControls();
 }
 
 function addBandToTable(bandsTableBody, band_id, band_name, seq_name) {
     // Create row
     let tr = $("<tr>");
+    // Add selection checkbox
+    let checkbox = $('<input class="form-check-input band-select" type="checkbox" onchange="bandSelectChanged(this);">')
+        .attr('data-band', band_id)
+        .attr('aria-label', 'Select band ' + (band_name || band_id))
+        .prop('checked', selectedBandIds.has(band_id));
+    tr.append($('<td class="bands-select-cell">').append(checkbox));
     // Add id
     let td_id = $('<td>').text(band_id);
     tr.append(td_id);
@@ -2236,6 +2256,127 @@ function buttonBandDelete(element) {
             console.debug("ERROR deleting band:" + errorThrown);
             alert("Failed to delete band. Error contacting server.");
         });
+}
+
+
+/////// Assign Sequences to Several Bands ///////
+
+const BULK_ASSIGN_MODE_HELP = {
+    replace: "Each selected band gets exactly the sequences below. Its current sequences are removed.",
+    add: "The sequences below are added to each selected band. Its current sequences stay.",
+    remove: "The sequences below are removed from each selected band that has them.",
+};
+
+function bandSelectChanged(element) {
+    let band_id = element.dataset.band;
+    if (element.checked) {
+        selectedBandIds.add(band_id);
+    } else {
+        selectedBandIds.delete(band_id);
+    }
+    updateBandSelectionControls();
+}
+
+function bandsSelectAllChanged(element) {
+    $('#bandsTable_body .band-select').each(function() {
+        this.checked = element.checked;
+        if (element.checked) {
+            selectedBandIds.add(this.dataset.band);
+        } else {
+            selectedBandIds.delete(this.dataset.band);
+        }
+    });
+    updateBandSelectionControls();
+}
+
+function updateBandSelectionControls() {
+    let total = $('#bandsTable_body .band-select').length;
+    let count = selectedBandIds.size;
+    let selectAll = $('#bandsSelectAll');
+    selectAll.prop('checked', total > 0 && count === total);
+    selectAll.prop('indeterminate', count > 0 && count < total);
+    selectAll.prop('disabled', total < 1);
+    $('#bandsSelectedCount').text(count > 0 ? count + " selected" : "");
+    $('#button-bulkAssign').prop('disabled', count < 1);
+}
+
+function getSelectedBands() {
+    // In table order, so the dialog lists them the way the page does
+    let selected = [];
+    $('#bandsTable_body .band-select:checked').each(function() {
+        let band = getBandFromCache(this.dataset.band);
+        if (band != null) selected.push(band);
+    });
+    return selected;
+}
+
+function buttonBulkAssignSequences() {
+    let selected = getSelectedBands();
+    if (selected.length < 1) return;
+    $('#bulkAssignTitle').text("Assign Sequences to " + selected.length + (selected.length === 1 ? " Band" : " Bands"));
+    // Each band with what it plays now, so Replace and Remove are not blind
+    let list = $('#bulkAssignBandList').empty();
+    selected.forEach((band) => {
+        let name = getStringFromDict(band, 'name') || band.band_id;
+        let current = getBandSequencesDisplayName(band) || "No sequences";
+        let item = $('<div class="list-group-item">');
+        item.append($('<div class="fw-semibold">').text(name));
+        item.append($('<div class="small text-secondary">').text(band.band_id + " \u2014 " + current));
+        list.append(item);
+    });
+    $('#bulkAssignModeReplace').prop('checked', true);
+    let picker = $('#bulkAssignSequence');
+    picker.data('helpText', '');
+    setBandSequencePickerValue(picker, []);
+    bulkAssignModeChanged();
+    $('#bulkAssignModal').modal('show');
+}
+
+function getBulkAssignMode() {
+    return $('input[name="bulkAssignMode"]:checked').val() || "replace";
+}
+
+function bulkAssignModeChanged() {
+    $('#bulkAssignModeHelp').text(BULK_ASSIGN_MODE_HELP[getBulkAssignMode()]);
+}
+
+function buttonBulkAssignSave() {
+    let bandIds = getSelectedBands().map((band) => band.band_id);
+    let sequenceIds = getBandSequencePickerValue($('#bulkAssignSequence'));
+    let mode = getBulkAssignMode();
+    if (bandIds.length < 1) return;
+    if (sequenceIds.length < 1) {
+        if (mode !== "replace") {
+            alert("Choose at least one sequence to " + mode + ".");
+            return;
+        }
+        if (!confirm("Clear all sequences from " + bandIds.length + (bandIds.length === 1 ? " band" : " bands") +
+                "? They will play the Disney or Unknown band sequences instead.")) {
+            return;
+        }
+    }
+    $('#button-bulkAssignSave').prop('disabled', true);
+    makeApiCall('/bands/sequences', 'PUT',
+        function(response, textStatus, jqXHR) {
+            $('#button-bulkAssignSave').prop('disabled', false);
+            let data = getDataFromSuccessfulApiResponse(response);
+            if (data != null && data instanceof Array) {
+                selectedBandIds.clear();
+                getKnownBandsList();
+                $('#bulkAssignModal').modal('hide');
+            } else {
+                let message = isDict(response) && isDict(response.data) ? getStringFromDict(response.data, 'message') : null;
+                alert("Failed to assign sequences. " + (message || "Server returned an error."));
+                // A band may have gone away; show the list as it is now
+                getKnownBandsList();
+            }
+        },
+        function(jqXHR, textStatus, errorThrown) {
+            $('#button-bulkAssignSave').prop('disabled', false);
+            console.debug("ERROR assigning sequences:" + errorThrown);
+            alert("Failed to assign sequences. Error contacting server.");
+        },
+        {bands: bandIds, sequences: sequenceIds, mode: mode});
 }
 
 

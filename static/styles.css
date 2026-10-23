@@ -82,6 +82,15 @@ body {
     overflow-wrap: anywhere;
 }
 
+.bands-select-cell {
+    width: 2.5rem;
+}
+
+.bulk-assign-band-list {
+    max-height: 12rem;
+    overflow-y: auto;
+}
+
 .sequence-actions-table .form-control,
 .sequence-actions-table .form-select {
     min-width: 0;

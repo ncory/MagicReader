@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from flask import Flask, request, render_template, send_file, send_from_directory
 from magicreader import MagicBand
+from bandManager import BandManager
 from sequence import Sequence
 from werkzeug.datastructures import FileStorage
 import platform
@@ -818,6 +819,31 @@ def RunMagicApi(magicreader: MagicBand, port=80):
             pass
         # If we got here we failed
         return {"result": "error"}
+
+    @app.route('/bands/sequences', methods=['PUT'])
+    def put_bandsSequences():
+        # Sets, adds or removes sequences on several bands in one change:
+        # {"bands": [...], "sequences": [...], "mode": "replace"|"add"|"remove"}
+        request_data = request.get_json(silent=True)
+        if not isinstance(request_data, dict):
+            return {"result": "error", "data": {"message": "Expected a JSON object."}}
+        band_ids = BandManager.uniqueIds(request_data.get('bands'))
+        if not band_ids:
+            return {"result": "error", "data": {"message": "No bands selected."}}
+        mode = request_data.get('mode', 'replace')
+        if mode not in BandManager.ASSIGN_MODES:
+            return {"result": "error", "data": {"message": f"Unknown mode: {mode}"}}
+        missing = magicreader.band_manager.assignSequences(band_ids, request_data.get('sequences'), mode)
+        if missing:
+            return {"result": "error", "data": {
+                "message": "Some bands no longer exist - reload the page and try again.",
+                "missing": missing
+            }}
+        if not magicreader.band_manager.saveToFile():
+            result = get_bands()
+            result['result'] = "error"
+            return result
+        return get_bands()
 
     @app.route('/band/<band_id>', methods=['DELETE'])
     def delete_band(band_id):

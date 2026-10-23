@@ -90,7 +90,49 @@ class BandManager:
             'sequences': sequences
         }
         return True
-    
+
+    ASSIGN_MODES = ("replace", "add", "remove")
+
+    def assignSequences(self, band_ids: list, sequence_ids: list, mode: str = "replace") -> list:
+        """Changes the sequences of several bands at once, leaving their names alone.
+
+        mode "replace" gives every band exactly sequence_ids, "add" appends
+        the ones each band does not have yet, and "remove" takes them off.
+        Returns the band ids that were not found; nothing is changed unless
+        every id was found, so a stale list in the browser cannot half-apply.
+        """
+        if mode not in BandManager.ASSIGN_MODES:
+            raise ValueError(f"mode must be one of: {', '.join(BandManager.ASSIGN_MODES)}")
+        sequences = BandManager.uniqueIds(sequence_ids)
+        missing = [band_id for band_id in band_ids if not isinstance(self.bands.get(band_id), dict)]
+        if missing:
+            return missing
+        for band_id in band_ids:
+            band = self.bands[band_id]
+            current = []
+            BandManager.appendBandSequenceNames(band, current)
+            if mode == "replace":
+                updated = sequences
+            elif mode == "add":
+                updated = current + sequences
+            else:
+                updated = [seq_id for seq_id in current if seq_id not in sequences]
+            # The old single 'sequence' key is folded into the list, as the
+            # edit form does when it saves
+            band.pop('sequence', None)
+            band['sequences'] = BandManager.uniqueIds(updated)
+        return []
+
+    @staticmethod
+    def uniqueIds(ids) -> list:
+        """Non-empty strings from ids, first occurrence kept, order preserved."""
+        found = []
+        if isinstance(ids, list):
+            for item in ids:
+                if isinstance(item, str) and item != '' and item not in found:
+                    found.append(item)
+        return found
+
     def deleteBand(self, band_id):
         """Deletes band. Returns True if band was removed or already wasn't in list."""
         if band_id is None:
