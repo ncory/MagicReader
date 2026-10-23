@@ -9,6 +9,7 @@
         "sound_startup": "Startup.wav",
         "sound_waiting": null,
         "sound_error": "Error.wav",
+        "sound_batch_add": "TapIn.wav",
         "startup_read_delay": 3,
         "error_read_delay": 5,
         "inactivity_timeout": 3600,

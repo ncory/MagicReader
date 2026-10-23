@@ -15,6 +15,7 @@ import unittest
 
 import _support  # noqa: F401
 import jsonStore
+import magicreader
 from bandManager import BandManager
 from batchAdd import BatchAdd
 from helpers import AppEvent, AppEventType
@@ -100,8 +101,9 @@ class BatchAddTests(UsesTempDataDir):
 
 
 class EventLoopTests(UsesTempDataDir):
-    def runTap(self, batchActive):
-        app = makeApp()
+    def runTap(self, batchActive, band_id=None):
+        band_id = band_id or NEW_BAND
+        self.app = app = makeApp()
         app.band_manager = self.bands
         app.batch_add = self.batch
         app.allowRead = True
@@ -112,7 +114,7 @@ class EventLoopTests(UsesTempDataDir):
         thread = threading.Thread(target=app.runEventQueue, daemon=True)
         thread.start()
         try:
-            app.event_queue.put((5, AppEvent(AppEventType.ReadRfid, RfidRead(NEW_BAND, True))))
+            app.event_queue.put((5, AppEvent(AppEventType.ReadRfid, RfidRead(band_id, True))))
             threading.Event().wait(0.3)
         finally:
             app.is_active = False
@@ -127,6 +129,37 @@ class EventLoopTests(UsesTempDataDir):
     def test_a_tap_with_batch_add_off_plays_as_usual(self):
         self.assertEqual(self.runTap(batchActive=False), [NEW_BAND])
         self.assertNotIn(NEW_BAND, self.bands.bands)
+        self.assertEqual(self.app.soundsPlayed, [])
+
+    def test_a_captured_band_plays_the_confirmation_sound(self):
+        # New or already known: either way the reader got the tap
+        for band_id in (NEW_BAND, KNOWN_BAND):
+            with self.subTest(band=band_id):
+                self.runTap(batchActive=True, band_id=band_id)
+                self.assertEqual(self.app.soundsPlayed, ["batchAdd"])
+
+    def test_a_failed_save_plays_the_error_sound(self):
+        self.bands.saveToFile = lambda: False
+        self.runTap(batchActive=True)
+        self.assertEqual(self.app.soundsPlayed, ["error"])
+
+    def test_no_sound_when_the_setting_is_turned_off(self):
+        original = magicreader.settings.get('sound_batch_add')
+        magicreader.settings['sound_batch_add'] = None
+        try:
+            self.runTap(batchActive=True)
+        finally:
+            magicreader.settings['sound_batch_add'] = original
+        self.assertEqual(self.app.soundsPlayed, [])
+
+
+class SettingTests(unittest.TestCase):
+    def test_the_sound_is_a_setting_shipped_as_the_tap_in_sound(self):
+        with open(jsonStore.defaultDataPath("settings.json")) as f:
+            self.assertEqual(json.load(f)["settings"]["sound_batch_add"], "TapIn.wav")
+        field = [f for f in magicreader.SETTINGS_SCHEMA if f["key"] == "sound_batch_add"]
+        self.assertEqual(field[0]["type"], "sound")
+        self.assertTrue(field[0]["nullable"])
 
 
 class ApiTests(UsesTempDataDir):

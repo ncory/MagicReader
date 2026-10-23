@@ -36,6 +36,11 @@ if data is None or not isinstance(data, dict) or 'settings' not in data:
     sys.exit(f"FATAL: Could not read settings from {SETTINGS_FILE}")
 config = data
 settings = config['settings']
+# Settings added by an update are missing from an existing settings.json; they
+# take their shipped default until the Settings page saves one
+default_data = jsonStore.loadJson(jsonStore.defaultDataPath(SETTINGS_FILENAME), useBackup=False)
+for key in jsonStore.fillMissingKeys(settings, (default_data or {}).get('settings')):
+    print(f"Setting '{key}' not in {SETTINGS_FILENAME} - using the default: {settings[key]!r}", flush=True)
 print_band_id = bool(settings['print_band_id'])
 SETTINGS_SCHEMA = [
     {
@@ -95,6 +100,13 @@ SETTINGS_SCHEMA = [
     {
         "key": "sound_error",
         "label": "Error Sound",
+        "type": "sound",
+        "section": "Sounds",
+        "nullable": True
+    },
+    {
+        "key": "sound_batch_add",
+        "label": "Batch Add Sound",
         "type": "sound",
         "section": "Sounds",
         "nullable": True
@@ -291,6 +303,7 @@ class MagicBand():
         self.soundManager.preLoadSound("startup", settings.get('sound_startup'))
         self.soundManager.preLoadSound("waiting", settings.get('sound_waiting'))
         self.soundManager.preLoadSound("error", settings.get('sound_error'))
+        self.soundManager.preLoadSound("batchAdd", settings.get('sound_batch_add'))
 
     def coerceSettingValue(self, field: dict, value):
         key = field.get("key")
@@ -509,7 +522,8 @@ class MagicBand():
                     # Batch-adding bands from the web UI? Then every tap is
                     # captured there and nothing plays.
                     if self.batch_add.isActive():
-                        self.batch_add.capture(event.data.id, event.data.isDisney)
+                        read = self.batch_add.capture(event.data.id, event.data.isDisney)
+                        self.triggerBatchAddRead(read["status"])
                         continue
                     # Are we looking for a read once?
                     if self.read_once_enabled:
@@ -654,6 +668,15 @@ class MagicBand():
         # Trigger LED sequence
         self.wledManager.callLedPreset(settings['wled_preset_error'])
     
+    def triggerBatchAddRead(self, status: str):
+        """Confirms a batch-add tap at the reader - whoever is tapping may not
+        be watching the page. A failed save gets the error sound instead."""
+        if status == "error":
+            if settings.get('sound_error') is not None:
+                self.soundManager.playSound("error")
+        elif settings.get('sound_batch_add') is not None:
+            self.soundManager.playSound("batchAdd")
+
     def triggerBlackout(self):
         """Turns off LEDs, stops all sounds, and cancels any pending RFID read actions"""
         if self.read_once_enabled:

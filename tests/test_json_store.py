@@ -150,5 +150,25 @@ class SeedingTests(unittest.TestCase):
         self.assertFalse(jsonStore.seedDataFileFromDefault("nosuchthing.json"))
 
 
+class FillMissingKeysTests(unittest.TestCase):
+    """A setting added by an update takes its shipped default on an existing reader."""
+
+    def test_missing_keys_are_filled_and_reported(self):
+        settings = {"sound_error": "Error.wav"}
+        added = jsonStore.fillMissingKeys(settings, {"sound_error": "Other.wav", "sound_batch_add": "TapIn.wav"})
+        self.assertEqual(added, ["sound_batch_add"])
+        self.assertEqual(settings, {"sound_error": "Error.wav", "sound_batch_add": "TapIn.wav"})
+
+    def test_a_setting_turned_off_stays_off(self):
+        settings = {"sound_batch_add": None}
+        self.assertEqual(jsonStore.fillMissingKeys(settings, {"sound_batch_add": "TapIn.wav"}), [])
+        self.assertIsNone(settings["sound_batch_add"])
+
+    def test_no_defaults_changes_nothing(self):
+        settings = {"a": 1}
+        self.assertEqual(jsonStore.fillMissingKeys(settings, None), [])
+        self.assertEqual(settings, {"a": 1})
+
+
 if __name__ == "__main__":
     unittest.main()

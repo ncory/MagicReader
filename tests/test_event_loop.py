@@ -43,9 +43,11 @@ def makeApp():
     app.triggerError = lambda: None
     app.triggerWaiting = lambda: None
     app.triggerBlackout = lambda: None
+    app.soundsPlayed = []
     app.soundManager = type("S", (), {
         "stopAllSounds": staticmethod(lambda: None),
         "stopMusic": staticmethod(lambda: None),
+        "playSound": staticmethod(app.soundsPlayed.append),
     })()
     return app
 

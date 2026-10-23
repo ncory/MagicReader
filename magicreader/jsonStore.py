@@ -121,6 +121,27 @@ def loadJson(path: str, useBackup: bool = True):
     return None
 
 
+def defaultDataPath(filename: str) -> str:
+    """The shipped template for data/<filename>: data/<name>.default.json."""
+    return dataPath(os.path.splitext(filename)[0] + DEFAULT_SUFFIX)
+
+
+def fillMissingKeys(target: dict, defaults: dict) -> list:
+    """Copies into target every key of defaults it does not have. Returns those keys.
+
+    For a data file that existed before an update added a key: the new key
+    takes its shipped default. A key that is present - even as null, which is
+    how a setting is turned off - is left alone.
+    """
+    added = []
+    if isinstance(target, dict) and isinstance(defaults, dict):
+        for key, value in defaults.items():
+            if key not in target:
+                target[key] = value
+                added.append(key)
+    return added
+
+
 def seedDataFileFromDefault(filename: str) -> bool:
     """Creates data/<filename> from data/<name>.default.json if it is missing.
 
@@ -131,7 +152,7 @@ def seedDataFileFromDefault(filename: str) -> bool:
     target = dataPath(filename)
     if os.path.exists(target):
         return True
-    default = dataPath(os.path.splitext(filename)[0] + DEFAULT_SUFFIX)
+    default = defaultDataPath(filename)
     if not os.path.exists(default):
         print(f"ERROR: No data file or default template for {filename}", flush=True)
         return False
