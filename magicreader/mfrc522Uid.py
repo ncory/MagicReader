@@ -263,38 +263,56 @@ class Mfrc522Uid:
             return  # a halted tag does not answer; that is success
         raise ReadError("tag answered HLTA")
 
+    @staticmethod
+    def describeFailure(step, reason, uid) -> str:
+        heard = f" [UID so far {uid.hex().upper()}]" if uid else ""
+        return f"{step}: {reason}{heard}"
+
     def readTag(self, halt=True) -> TagRead:
         """Reads the full UID of the tag in the field.
 
         Raises NoTag when the field is empty (or every tag in it is halted)
         and ReadError when a tag answered but the read did not complete.
         """
-        atqa = self.requestA()
+        step = "REQA"
         uid = b""
         sak = None
-        for level, sel in enumerate(PICC_SEL_CL, start=1):
-            self.clearBits(CollReg, 0x80)
-            frame, validBits = self.transceive([sel, 0x20])
-            if len(frame) != 5 or validBits != 0:
-                raise ReadError(f"CL{level} anticollision returned {frame.hex()}")
-            if bcc(frame[:4]) != frame[4]:
-                raise ReadError(f"CL{level} BCC mismatch in {frame.hex()}")
+        try:
+            atqa = self.requestA()
+            for level, sel in enumerate(PICC_SEL_CL, start=1):
+                step = f"CL{level} anticollision"
+                self.clearBits(CollReg, 0x80)
+                frame, validBits = self.transceive([sel, 0x20])
+                if len(frame) != 5 or validBits != 0:
+                    raise ReadError(f"returned {frame.hex()}")
+                if bcc(frame[:4]) != frame[4]:
+                    raise ReadError(f"BCC mismatch in {frame.hex()}")
 
-            reply = self.transceiveWithCrc(bytes([sel, 0x70]) + frame)
-            if len(reply) != 1:
-                raise ReadError(f"CL{level} SAK reply {reply.hex()}")
-            sak = reply[0]
+                step = f"CL{level} SELECT"
+                reply = self.transceiveWithCrc(bytes([sel, 0x70]) + frame)
+                if len(reply) != 1:
+                    raise ReadError(f"SAK reply {reply.hex()}")
+                sak = reply[0]
 
-            if sak & SAK_UID_NOT_COMPLETE:
-                if frame[0] != PICC_CASCADE_TAG:
-                    raise ReadError(f"CL{level} SAK says more follows but no cascade tag")
-                uid += frame[1:4]
+                if sak & SAK_UID_NOT_COMPLETE:
+                    if frame[0] != PICC_CASCADE_TAG:
+                        raise ReadError("SAK says more follows but no cascade tag")
+                    uid += frame[1:4]
+                else:
+                    uid += frame[0:4]
+                    break
             else:
-                uid += frame[0:4]
-                break
-        else:
-            raise ReadError("UID still incomplete after cascade level 3")
+                raise ReadError("UID still incomplete after cascade level 3")
 
-        if halt:
-            self.haltA()
+            if halt:
+                step = "HLTA"
+                self.haltA()
+        except NoTag:
+            if step == "REQA":
+                raise
+            # A tag answered REQA and then went quiet. That is a failed read,
+            # not an empty field, and the app logs the difference.
+            raise ReadError(self.describeFailure(step, "no answer", uid)) from None
+        except ReadError as e:
+            raise ReadError(self.describeFailure(step, e, uid)) from None
         return TagRead(uid=uid, atqa=atqa, sak=sak)

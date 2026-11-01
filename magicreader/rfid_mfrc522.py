@@ -17,6 +17,9 @@ class RfidMfrc522(rfid.RfidReader):
     STARTUP_TIMEOUT_SECONDS = 30
     VALID_VERSION_VALUES = {0x88, 0x90, 0x91, 0x92}
     POLL_INTERVAL_SECONDS = 0.05
+    FAILED_READ_LOG_SECONDS = 1
+    lastFailedRead = None
+    lastFailedReadTime = 0.0
 
     def __init__(self, app, port:str = None):
         super().__init__(app, port)
@@ -121,10 +124,14 @@ class RfidMfrc522(rfid.RfidReader):
                 # readTag() halts the band once it has been read, so one tap
                 # gives one read however long the band is held there.
                 tag = self.reader.readTag()
-            except (NoTag, ReadError):
-                # NoTag is an empty field. ReadError is usually a band at the
-                # edge of the field answering only part of the exchange; the
-                # next poll normally reads it cleanly.
+            except NoTag:
+                # An empty field: the normal result of polling.
+                time.sleep(self.POLL_INTERVAL_SECONDS)
+                continue
+            except ReadError as e:
+                # Usually a band at the edge of the field answering only part
+                # of the exchange; the next poll normally reads it cleanly.
+                self.logFailedRead(e)
                 time.sleep(self.POLL_INTERVAL_SECONDS)
                 continue
             except CancelReadException:
@@ -155,6 +162,19 @@ class RfidMfrc522(rfid.RfidReader):
                 self.lastReadTime = now
                 self.lastReadId = id
                 print("RFID:: Waiting for RFID....", flush=True)
+            else:
+                print(f"RFID:: Dropped repeat read: {id}", flush=True)
+
+    def logFailedRead(self, error):
+        # Something near the antenna can fail every poll, so identical failures
+        # are limited to one line per FAILED_READ_LOG_SECONDS.
+        message = str(error)
+        now = time.monotonic()
+        if (message != self.lastFailedRead
+                or now - self.lastFailedReadTime >= self.FAILED_READ_LOG_SECONDS):
+            print(f"RFID:: Failed read: {message}", flush=True)
+            self.lastFailedRead = message
+            self.lastFailedReadTime = now
 
     def stop(self):
         self.reader.close()

@@ -97,6 +97,39 @@ class ReadTagTests(unittest.TestCase):
         with self.assertRaises(ReadError):
             readerFor(tag).readTag()
 
+    def assertFailsAt(self, tag, expected):
+        with self.assertRaises(ReadError) as caught:
+            readerFor(tag).readTag()
+        self.assertIn(expected, str(caught.exception))
+
+    def test_a_tag_going_quiet_mid_read_is_a_read_error_naming_the_step(self):
+        tag = FakeTag(GENERIC_UID, finalSak=0x08)
+        answer = tag.transceive
+
+        def quietAtSelect(data, txLastBits=0):
+            if bytes(data)[1:2] == b"\x70":
+                raise NoTag()
+            return answer(data, txLastBits)
+        tag.transceive = quietAtSelect
+        self.assertFailsAt(tag, "CL1 SELECT: no answer")
+
+    def test_a_failure_at_hlta_names_the_uid_it_threw_away(self):
+        tag = FakeTag(GENERIC_UID, finalSak=0x08)
+        answer = tag.transceive
+
+        def noiseAtHalt(data, txLastBits=0):
+            if bytes(data)[0] == mfrc522Uid.PICC_HLTA:
+                raise ReadError("ErrorReg=0x01")
+            return answer(data, txLastBits)
+        tag.transceive = noiseAtHalt
+        self.assertFailsAt(tag, "HLTA: ErrorReg=0x01 [UID so far 3611EE94]")
+
+    def test_an_empty_field_is_still_no_tag(self):
+        tag = FakeTag(GENERIC_UID, finalSak=0x08)
+        tag.halted = True
+        with self.assertRaises(NoTag):
+            readerFor(tag).readTag()
+
 
 if __name__ == "__main__":
     unittest.main()

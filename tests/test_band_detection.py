@@ -4,7 +4,9 @@ Band IDs are the tag's full UID as uppercase hex. Every MagicBand has a 7-byte
 NXP UID (first byte 0x04), ending in 0x80 on a MagicBand 2 and 0x90 on a
 MagicBand+.
 """
+import contextlib
 import datetime
+import io
 import queue
 import types
 import unittest
@@ -116,6 +118,30 @@ class ReaderThreadTests(unittest.TestCase):
         # cancelling a sequence - must not be swallowed
         events = self.runThread([self.tag("0453652AC05F80"), self.tag("3611EE94", sak=0x08)])
         self.assertEqual([e.id for e in events], ["0453652AC05F80", "3611EE94"])
+
+    def logOf(self, outcomes):
+        log = io.StringIO()
+        with contextlib.redirect_stdout(log):
+            self.runThread(outcomes)
+        return log.getvalue()
+
+    def test_a_failed_read_is_logged_with_its_reason(self):
+        self.assertIn("RFID:: Failed read: REQA: bad ATQA", self.logOf([ReadError("REQA: bad ATQA")]))
+
+    def test_an_empty_field_is_not_logged_as_a_failure(self):
+        self.assertNotIn("Failed read", self.logOf([NoTag(), NoTag()]))
+
+    def test_identical_failures_are_limited_to_one_line(self):
+        log = self.logOf([ReadError("REQA: bad ATQA")] * 5)
+        self.assertEqual(log.count("Failed read"), 1)
+
+    def test_different_failures_are_each_logged(self):
+        log = self.logOf([ReadError("REQA: bad ATQA"), ReadError("HLTA: ErrorReg=0x01")])
+        self.assertEqual(log.count("Failed read"), 2)
+
+    def test_a_dropped_repeat_read_is_logged(self):
+        log = self.logOf([self.tag("0453652AC05F80"), NoTag(), self.tag("0453652AC05F80")])
+        self.assertIn("RFID:: Dropped repeat read: 0453652AC05F80", log)
 
 
 if __name__ == "__main__":
